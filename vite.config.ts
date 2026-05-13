@@ -9,10 +9,10 @@ export default defineConfig(({ mode }) => {
     plugins: [
       ...(mode !== 'test'
         ? VitePluginNode({
-            adapter: 'telegraf',
+            adapter: 'express' as any,
             appPath: './src/index.ts',
             exportName: 'viteNodeApp',
-            tsCompiler: 'esbuild',
+            tsCompiler: 'esbuild' as any,
           })
         : []),
     ],
