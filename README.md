@@ -1,0 +1,2 @@
+# cinna
+Telegram daily assistant
