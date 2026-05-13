@@ -12,10 +12,10 @@ Cinna is a modular Telegram assistant using **Gemini 3 Flash** for intent routin
     - [x] **Test 1.1:** `npm run build` succeeds; `vitest` runs with 0 tests.
 - [x] **Step 1.2: CI/CD Setup** (GitHub Actions)
     - [x] **Test 1.2:** Push to main triggers lint, build, and test workflow.
-- [ ] **Step 1.3: Basic Bot "Heartbeat"** (Verify text reception)
-    - [ ] **Test 1.3:** Unit test for bot response logic; manual text verification.
-- [ ] **Step 1.4: Audio Reception Verification** (Verify voice detection)
-    - [ ] **Test 1.4:** Manual voice note verification (bot replies "Voice received").
+- [x] **Step 1.3: Basic Bot "Heartbeat"** (Verify text reception)
+    - [x] **Test 1.3:** Unit test for bot response logic; manual text verification.
+- [x] **Step 1.4: Audio Reception Verification** (Verify voice detection)
+    - [x] **Test 1.4:** Manual voice note verification (bot replies "Voice received").
 
 ### Phase 2: Core Brain (Gemini Integration)
 - [ ] **Step 2.1: Simple Gemini Text Completion** (Verify API connectivity)
