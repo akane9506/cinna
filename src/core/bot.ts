@@ -1,6 +1,6 @@
 import { Context, Telegraf } from 'telegraf';
 import { message } from 'telegraf/filters';
-import { config } from './config.js';
+import { config } from './config';
 
 export const bot = new Telegraf(config.TELEGRAM_BOT_TOKEN);
 

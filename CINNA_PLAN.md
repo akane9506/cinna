@@ -10,9 +10,9 @@ The system follows a "Brain & Modules" pattern:
 
 ### Project Structure
 ```text
-omnibot/
+cinna/
 ├── .github/workflows/
-│   ├── ci.yml                # CI: Lint, Build, Test
+│   ├── ci.yml                # CI: Lint, Test
 │   └── cd.yml                # CD: Deploy to Cloud Run
 ├── src/
 │   ├── core/
@@ -27,7 +27,7 @@ omnibot/
 │   │   └── shared/           # Cross-module utils
 │   ├── services/
 │   │   └── audio.ts          # Telegram voice downloader
-│   ├── index.ts              # Entry point
+│   ├── index.ts              # Entry point (Bun + Hono)
 │   └── types.ts              # Global types
 ├── .env                      # Local secrets
 ├── .gitignore
@@ -40,22 +40,17 @@ omnibot/
 ## 2. Exhaustive Dependency List
 
 ### Production Dependencies
-- **`telegraf`**: Modern Telegram Bot Framework for Node.js.
+- **`telegraf`**: Modern Telegram Bot Framework.
 - **`@google/generative-ai`**: Google's official SDK for Gemini.
-- **`dotenv`**: Loads environment variables from `.env`.
 - **`zod`**: TypeScript-first schema validation for environment variables.
 - **`hono`**: Ultrafast web framework for the edge and Cloud Run.
-- **`@hono/node-server`**: Adapter for Hono on Node.js.
-- **`axios`**: To download voice files from Telegram's file server.
+- **`fetch`**: Built-in Bun API to download voice files from Telegram's file server.
 
 ### Development Dependencies
 - **`typescript`**: Static typing for the codebase.
-- **`@types/node`**: Type definitions for Node.js.
-- **`ts-node`**: To run TypeScript files directly in development.
-- **`nodemon`**: Monitor for changes and restart the server automatically.
-- **`vitest`**: Modern and fast unit testing framework.
-- **`rimraf`**: To clean the `dist/` directory before builds.
-- **`eslint`**: Linter to maintain code quality.
+- **`@types/bun`**: Type definitions for Bun.
+- **`bun:test`**: Built-in Bun testing framework.
+- **`eslint`**: Linter to maintain code quality, with TypeScript support.
 
 ---
 
@@ -64,8 +59,7 @@ omnibot/
 ### CI (Continuous Integration)
 Triggered on every pull request and push to `main`.
 - **Lint:** Run `eslint` to ensure style consistency.
-- **Build:** Run `npm run build` to verify TypeScript compilation.
-- **Test:** Run `npm run test` (Vitest) to ensure no regressions.
+- **Test:** Run `bun test` to ensure no regressions.
 
 ### CD (Continuous Deployment)
 Triggered on merge to `main` or specific tags.
@@ -78,16 +72,16 @@ Triggered on merge to `main` or specific tags.
 
 ### Phase 1: Infrastructure & Basic Connectivity
 *   **Step 1.1: Project Initialization**
-    *   Initialize `npm`, install `telegraf`, `hono`, `dotenv`, `typescript`, `vitest`.
-    *   *Verification:* `npm run build` succeeds; `vitest` runs successfully.
+    *   Initialize `bun`, install `telegraf`, `hono`, `typescript`, `zod`.
+    *   *Verification:* `bun test` succeeds.
 *   **Step 1.2: CI/CD Setup**
-    *   Create `.github/workflows/ci.yml` for linting, building, and testing.
+    *   Create `.github/workflows/ci.yml` using `oven-sh/setup-bun`.
     *   *Verification:* Push to GitHub and see the green checkmark on the commit.
 *   **Step 1.3: Basic Bot "Heartbeat"**
-    *   Create `src/index.ts` with a simple Telegraf handler.
+    *   Create `src/index.ts` with a simple Telegraf handler and Hono health check.
     *   *Verification:* 
         - [ ] Manual: Send text to bot, get reply.
-        - [ ] Test: Unit test the message handler logic.
+        - [ ] Test: Unit test the message handler logic using `bun:test`.
 *   **Step 1.4: Audio Reception Verification**
     *   Update bot to handle `voice` updates.
     *   *Verification:* 

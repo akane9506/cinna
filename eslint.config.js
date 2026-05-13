@@ -15,6 +15,10 @@ export default [
       globals: {
         console: "readonly",
         process: "readonly",
+        Bun: "readonly",
+        fetch: "readonly",
+        Response: "readonly",
+        Request: "readonly",
       },
     },
     plugins: {
@@ -22,6 +26,7 @@ export default [
     },
     rules: {
       ...tsPlugin.configs.recommended.rules,
+      "@typescript-eslint/no-explicit-any": "warn",
       "no-console": "off",
     },
   },
