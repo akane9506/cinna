@@ -9,7 +9,10 @@ To verify **Phase 1 (Infrastructure & Heartbeat)**, follow these steps:
 ### 1. Create your Telegram Bot
 1. Open Telegram and search for [@BotFather](https://t.me/botfather).
 2. Use the `/newbot` command to create a new bot and get your **API Token**.
-3. (Optional) Search for your new bot in Telegram and click **Start**.
+3. **Finding your bot:** BotFather will provide a link (e.g., `t.me/YourBotName_bot`). Click it or search for your bot's username in the Telegram search bar.
+4. Click **Start** in the chat with your bot.
+
+> **Note:** Since the bot is currently in development, it will only respond when you are running the project locally on your machine.
 
 ### 2. Configure Environment Variables
 1. Create a `.env` file in the root directory (based on `.env.example`):
