@@ -1,7 +1,4 @@
 import { z } from 'zod';
-import dotenv from 'dotenv';
-
-dotenv.config();
 
 const configSchema = z.object({
   TELEGRAM_BOT_TOKEN: z.string(),
@@ -10,7 +7,7 @@ const configSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
 });
 
-const parsedConfig = configSchema.safeParse(process.env);
+const parsedConfig = configSchema.safeParse(Bun.env);
 
 let configData: z.infer<typeof configSchema>;
 
@@ -23,7 +20,7 @@ if (!parsedConfig.success) {
   
   console.error('❌ Invalid configuration:', JSON.stringify(fieldErrors, null, 2));
   
-  if (process.env.NODE_ENV === 'test') {
+  if (Bun.env.NODE_ENV === 'test') {
     // Fallback for tests if env vars are missing
     configData = {
       TELEGRAM_BOT_TOKEN: 'test_token',
