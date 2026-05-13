@@ -11,6 +11,9 @@ The system follows a "Brain & Modules" pattern:
 ### Project Structure
 ```text
 omnibot/
+├── .github/workflows/
+│   ├── ci.yml                # CI: Lint, Build, Test
+│   └── cd.yml                # CD: Deploy to Cloud Run
 ├── src/
 │   ├── core/
 │   │   ├── bot.ts            # Telegraf setup
@@ -38,45 +41,36 @@ omnibot/
 
 ### Production Dependencies
 - **`telegraf`**: Modern Telegram Bot Framework for Node.js.
-- **`@google/generative-ai`**: Google's official SDK for Gemini 1.5.
+- **`@google/generative-ai`**: Google's official SDK for Gemini.
 - **`dotenv`**: Loads environment variables from `.env`.
 - **`zod`**: TypeScript-first schema validation for environment variables.
-- **`express`**: Lightweight web server for Webhook support on Cloud Run.
+- **`hono`**: Ultrafast web framework for the edge and Cloud Run.
+- **`@hono/node-server`**: Adapter for Hono on Node.js.
 - **`axios`**: To download voice files from Telegram's file server.
-- **`fluent-ffmpeg`**: (Optional) For audio manipulation if needed in future.
 
 ### Development Dependencies
 - **`typescript`**: Static typing for the codebase.
 - **`@types/node`**: Type definitions for Node.js.
-- **`@types/express`**: Type definitions for Express.
 - **`ts-node`**: To run TypeScript files directly in development.
 - **`nodemon`**: Monitor for changes and restart the server automatically.
 - **`vitest`**: Modern and fast unit testing framework.
 - **`rimraf`**: To clean the `dist/` directory before builds.
+- **`eslint`**: Linter to maintain code quality.
 
 ---
 
-## 3. Testing Strategy
+## 3. CI/CD Strategy (GitHub Actions)
 
-### Unit Testing (Automated)
-We will use **Vitest** for isolated logic testing.
-- **Core Brain:** Mock Gemini API responses to verify that different text/voice inputs trigger the correct function calls (e.g., `manage_grocery_list`).
-- **Grocery Module:** Test the `service.ts` logic for adding, removing, and listing items in memory to ensure data integrity.
-- **Config Validation:** Verify that the Zod schema correctly identifies missing or invalid environment variables.
+### CI (Continuous Integration)
+Triggered on every pull request and push to `main`.
+- **Lint:** Run `eslint` to ensure style consistency.
+- **Build:** Run `npm run build` to verify TypeScript compilation.
+- **Test:** Run `npm run test` (Vitest) to ensure no regressions.
 
-### Manual Testing (Integration)
-Once the bot is live (locally via Long Polling), the following scenarios must be verified:
-- **Text Entry:** 
-    - Input: "Add 2 apples and milk" -> Expected: Grocery list updated, response in English.
-    - Input: "Ajoute du pain" -> Expected: Grocery list updated, response in French.
-- **Voice Entry:** 
-    - Send voice note in English: "I need some eggs." -> Expected: Gemini transcribes and adds to list.
-    - Send voice note in Cantonese: "買多支牛奶" -> Expected: Gemini transcribes and adds to list in Cantonese.
-- **Intent Routing:** 
-    - Input: "Hello, who are you?" -> Expected: General assistant response (no grocery tool triggered).
-- **Edge Cases:** 
-    - Empty voice message.
-    - Large lists (10+ items at once).
+### CD (Continuous Deployment)
+Triggered on merge to `main` or specific tags.
+- **Build & Push:** Build Docker image and push to Google Artifact Registry.
+- **Deploy:** Deploy the new image to GCP Cloud Run.
 
 ---
 
@@ -84,47 +78,62 @@ Once the bot is live (locally via Long Polling), the following scenarios must be
 
 ### Phase 1: Infrastructure & Basic Connectivity
 *   **Step 1.1: Project Initialization**
-    *   Initialize `npm`, install `telegraf`, `dotenv`, and `typescript`.
-    *   *Verification:* Run `npx tsc` to ensure the environment is correctly set up.
-*   **Step 1.2: Basic Bot "Heartbeat"**
-    *   Create a minimal `src/index.ts` that listens for text and responds with "Received!".
-    *   *Verification:* Send any text to the bot on Telegram and get the "Received!" reply.
-*   **Step 1.3: Audio Reception Verification**
-    *   Update the bot to detect voice messages and reply with "Voice message received!".
-    *   *Verification:* Send a voice note; verify the bot recognizes it as audio.
+    *   Initialize `npm`, install `telegraf`, `hono`, `dotenv`, `typescript`, `vitest`.
+    *   *Verification:* `npm run build` succeeds; `vitest` runs successfully.
+*   **Step 1.2: CI/CD Setup**
+    *   Create `.github/workflows/ci.yml` for linting, building, and testing.
+    *   *Verification:* Push to GitHub and see the green checkmark on the commit.
+*   **Step 1.3: Basic Bot "Heartbeat"**
+    *   Create `src/index.ts` with a simple Telegraf handler.
+    *   *Verification:* 
+        - [ ] Manual: Send text to bot, get reply.
+        - [ ] Test: Unit test the message handler logic.
+*   **Step 1.4: Audio Reception Verification**
+    *   Update bot to handle `voice` updates.
+    *   *Verification:* 
+        - [ ] Manual: Send voice note, bot replies "Voice received".
 
 ### Phase 2: Core Brain (Gemini Integration)
 *   **Step 2.1: Simple Gemini Text Completion**
-    *   Connect the Gemini API. Send a hardcoded text prompt to Gemini and print the result to the console.
-    *   *Verification:* Check console logs for a valid response from Gemini.
+    *   Integration with `@google/generative-ai`.
+    *   *Verification:* 
+        - [ ] Test: Mock API call to Gemini and verify handling of the response.
 *   **Step 2.2: Text Intent Routing**
-    *   Implement "The Brain" logic. Tell Gemini to detect if a text message is about "groceries" or "other".
-    *   *Verification:* Send "I need milk" (Bot logs: `Intent: Grocery`) and "Who are you?" (Bot logs: `Intent: Other`).
+    *   Implement `Brain` service for intent classification.
+    *   *Verification:* 
+        - [ ] Test: Unit tests with various inputs (Grocery vs Other) and mocked Gemini output.
 *   **Step 2.3: Audio-to-Brain Link**
-    *   Implement the `audio.ts` service to download the Telegram OGG file and send it to Gemini.
-    *   *Verification:* Send a voice note "Buy bread". Verify Gemini returns the transcription and correctly identifies the "Grocery" intent in the logs.
+    *   Implement `audio.ts` to fetch and pass audio bytes to Gemini.
+    *   *Verification:* 
+        - [ ] Test: Integration test simulating audio download and Gemini processing.
 
 ### Phase 3: The Grocery Module
 *   **Step 3.1: In-Memory List Logic**
-    *   Create the `GroceryService` that can add/remove items from a simple array.
-    *   *Verification:* Run a small Vitest test to add "Apples" and check if the list contains "Apples".
+    *   `GroceryService` for state management.
+    *   *Verification:* 
+        - [ ] Test: 100% unit test coverage for `add`, `remove`, `list` methods.
 *   **Step 3.2: Tool Integration (Function Calling)**
-    *   Connect Gemini's function call (`manage_grocery_list`) to the `GroceryService`.
-    *   *Verification:* Send "Add eggs". Bot should reply with "Added eggs to your list. Current list: eggs."
+    *   Configure Gemini tools for grocery management.
+    *   *Verification:* 
+        - [ ] Test: End-to-end integration test (Mock Gemini -> Tool Call -> Service Update).
 *   **Step 3.3: Multi-Language Loop**
-    *   Refine the system prompt to ensure the final response is in the user's input language.
-    *   *Verification:* Send voice note in French "Ajoute du lait". Bot should reply in French confirming the addition.
+    *   Refine system prompts for language parity.
+    *   *Verification:* 
+        - [ ] Manual: Multi-language voice note testing (FR, EN, ES, etc.).
 
 ### Phase 4: Deployment & Webhooks
 *   **Step 4.1: Hono Webhook Server**
-    *   Switch from Long Polling to a **Hono** server handling Telegram updates.
-    *   *Verification:* Use `ngrok` (locally) to verify the bot still works via the webhook URL.
+    *   Expose webhook endpoint using Hono.
+    *   *Verification:* 
+        - [ ] Test: Unit test for the Hono route handling Telegram updates.
 *   **Step 4.2: GCP Containerization**
-    *   Create the `Dockerfile` and build the image locally.
-    *   *Verification:* Run the container locally and verify it starts without errors.
+    *   Finalize `Dockerfile`.
+    *   *Verification:* 
+        - [ ] Manual: `docker build` succeeds; container starts locally.
 *   **Step 4.3: Cloud Run Deployment**
-    *   Deploy to GCP and set environment variables.
-    *   *Verification:* Final test on the live Telegram bot.
+    *   Setup `cd.yml` for automated deployment.
+    *   *Verification:* 
+        - [ ] Manual: Bot works in production via the Cloud Run URL.
 
 ## 4. Multi-Language Strategy
 - **Prompting:** The System Instruction will state: *"You are a helpful assistant. Detect the user's language. If a tool is called, process the data. Always output your final text response in the detected language."*
