@@ -30,7 +30,7 @@ To verify **Phase 1 (Infrastructure & Heartbeat)**, follow these steps:
 # Install dependencies
 npm install
 
-# Run in development mode (with hot-reload)
+# Run in development mode (Vite)
 npm run dev
 ```
 
@@ -42,7 +42,7 @@ Once the console says `Bot is live!`, go to your Telegram bot and send:
 ---
 
 ## 🛠 Development Commands
-- `npm run dev`: Start the bot with nodemon and ts-node.
+- `npm run dev`: Start the bot with Vite (hot-reloading).
 - `npm run build`: Compile TypeScript to JavaScript in `dist/`.
 - `npm run test`: Run the Vitest suite.
 - `npm run lint`: Run ESLint check.
