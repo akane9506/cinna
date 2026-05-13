@@ -15,8 +15,13 @@ const parsedConfig = configSchema.safeParse(process.env);
 let configData: z.infer<typeof configSchema>;
 
 if (!parsedConfig.success) {
-  const errorDetails = parsedConfig.error.flatten();
-  console.error('❌ Invalid configuration:', JSON.stringify(errorDetails.fieldErrors, null, 2));
+  const issues = parsedConfig.error.issues;
+  const fieldErrors = issues.map(issue => ({
+    path: issue.path.join('.'),
+    message: issue.message
+  }));
+  
+  console.error('❌ Invalid configuration:', JSON.stringify(fieldErrors, null, 2));
   
   if (process.env.NODE_ENV === 'test') {
     // Fallback for tests if env vars are missing

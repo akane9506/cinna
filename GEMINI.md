@@ -49,6 +49,7 @@ Cinna is a modular Telegram assistant using **Gemini 3 Flash** for intent routin
 3. **Multi-Language:** The `Brain` MUST detect the input language and the bot MUST respond in that same language.
 4. **Verified Steps:** Never move to the next checkbox until the current one is verified as per `CINNA_PLAN.md`.
 5. **CI/CD Driven:** No code is merged without passing the GitHub Actions CI pipeline.
+6. **Modern Standards:** Always prioritize modern, non-legacy implementations and APIs (e.g., avoid deprecated library methods).
 
 ## 📦 Core Stack
 - **Framework:** Telegraf (Telegram), Hono (Web)
