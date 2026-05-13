@@ -9,7 +9,7 @@ export default defineConfig(({ mode }) => {
     plugins: [
       ...(mode !== 'test'
         ? VitePluginNode({
-            adapter: 'express' as any,
+            adapter: 'node' as any,
             appPath: './src/index.ts',
             exportName: 'viteNodeApp',
             tsCompiler: 'esbuild' as any,
