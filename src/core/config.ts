@@ -3,6 +3,7 @@ import { z } from 'zod';
 const configSchema = z.object({
   TELEGRAM_BOT_TOKEN: z.string(),
   GEMINI_API_KEY: z.string(),
+  ALLOWED_USERS: z.string().transform((val) => val.split(',').map(id => parseInt(id.trim(), 10))),
   PORT: z.string().default('3000'),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
 });
@@ -25,6 +26,7 @@ if (!parsedConfig.success) {
     configData = {
       TELEGRAM_BOT_TOKEN: 'test_token',
       GEMINI_API_KEY: 'test_key',
+      ALLOWED_USERS: [12345], // Default test user ID
       PORT: '3000',
       NODE_ENV: 'test',
     };
