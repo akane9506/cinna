@@ -73,33 +73,38 @@ Triggered on merge to `main` or specific tags.
 ### Phase 1: Infrastructure & Basic Connectivity
 *   **Step 1.1: Project Initialization**
     *   Initialize `bun`, install `telegraf`, `hono`, `typescript`, `zod`.
-    *   *Verification:* `bun test` succeeds.
+    *   *Verification:* [x] `bun test` succeeds.
 *   **Step 1.2: CI/CD Setup**
     *   Create `.github/workflows/ci.yml` using `oven-sh/setup-bun`.
-    *   *Verification:* Push to GitHub and see the green checkmark on the commit.
+    *   *Verification:* [x] Push to GitHub and see the green checkmark on the commit.
 *   **Step 1.3: Basic Bot "Heartbeat"**
     *   Create `src/index.ts` with a simple Telegraf handler and Hono health check.
     *   *Verification:* 
-        - [ ] Manual: Send text to bot, get reply.
-        - [ ] Test: Unit test the message handler logic using `bun:test`.
+        - [x] Manual: Send text to bot, get reply.
+        - [x] Test: Unit test the message handler logic using `bun:test`.
 *   **Step 1.4: Audio Reception Verification**
     *   Update bot to handle `voice` updates.
     *   *Verification:* 
-        - [ ] Manual: Send voice note, bot replies "Voice received".
+        - [x] Manual: Send voice note, bot replies "Voice received".
 
 ### Phase 2: Core Brain (Gemini Integration)
 *   **Step 2.1: Simple Gemini Text Completion**
     *   Integration with `@google/generative-ai`.
+    *   Wire up `src/core/bot.ts` to use Gemini for text replies.
     *   *Verification:* 
         - [ ] Test: Mock API call to Gemini and verify handling of the response.
+        - [ ] Manual (CLI): Run a CLI test script (`scripts/test-gemini.ts`) that prints a Gemini completion to the console.
+        - [ ] Manual (Telegram): Send "Hello" to the bot in Telegram and receive an AI-generated greeting.
 *   **Step 2.2: Text Intent Routing**
-    *   Implement `Brain` service for intent classification.
+    *   Implement `Brain` service for structured intent classification (JSON output).
     *   *Verification:* 
         - [ ] Test: Unit tests with various inputs (Grocery vs Other) and mocked Gemini output.
+        - [ ] Manual: Send "/test_route buy milk" to the bot and verify it logs the "GROCERY" intent and detected language.
 *   **Step 2.3: Audio-to-Brain Link**
     *   Implement `audio.ts` to fetch and pass audio bytes to Gemini.
     *   *Verification:* 
         - [ ] Test: Integration test simulating audio download and Gemini processing.
+        - [ ] Manual: Send a voice note "add eggs to my list" and verify the bot logs the correct transcription and intent.
 
 ### Phase 3: The Grocery Module
 *   **Step 3.1: In-Memory List Logic**
