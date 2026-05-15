@@ -145,3 +145,6 @@ vite.config.ts.timestamp-*
 # Bun Coverage
 .bun-coverage/
 coverage/
+
+# Local Persona
+src/core/persona.md

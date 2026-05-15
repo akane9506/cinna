@@ -18,20 +18,22 @@ Cinna is a modular Telegram assistant using **Gemini 3 Flash** for intent routin
     - [x] **Test 1.4:** Manual voice note verification (bot replies "Voice received").
 
 ### Phase 2: Core Brain (Gemini Integration)
-- [ ] **Step 2.1: Simple Gemini Text Completion** (Verify API connectivity)
-    - [ ] **Test 2.1:** Integration test for Gemini API connectivity.
+- [x] **Step 2.1: Simple Gemini Text Completion** (Verify API connectivity)
+    - [x] **Test 2.1:** Unit tests for `brain.ts` with mocked Gemini responses, session management, and history truncation.
 - [ ] **Step 2.2: Text Intent Routing** (Grocery vs Other)
     - [ ] **Test 2.2:** Unit tests for `brain.ts` with mocked Gemini responses for various intents.
 - [ ] **Step 2.3: Audio-to-Brain Link** (OGG download -> Gemini)
     - [ ] **Test 2.3:** Integration test for audio processing pipeline.
 
-### Phase 3: The Grocery Module
-- [ ] **Step 3.1: In-Memory List Logic** (Unit tested service)
-    - [ ] **Test 3.1:** 100% coverage for `GroceryService` unit tests.
-- [ ] **Step 3.2: Tool Integration** (Gemini Function Calling)
-    - [ ] **Test 3.2:** Integration test for Gemini -> GroceryService link.
-- [ ] **Step 3.3: Multi-Language Loop** (Verify language detection & response)
-    - [ ] **Test 3.3:** Unit tests for language detection prompts; manual multi-language voice tests.
+### Phase 3: Modules & Persistence (Firestore)
+- [ ] **Step 3.1: Firestore Service Integration** (Database setup)
+    - [ ] **Test 3.1:** Integration tests for Firestore connection.
+- [ ] **Step 3.2: Persistent Grocery Module** (Grocery logic with Firestore)
+    - [ ] **Test 3.2:** Unit tests for `GroceryService` with Firestore.
+- [ ] **Step 3.3: Feedback & Bug Tracker** (Meta-module for bot improvements)
+    - [ ] **Test 3.3:** Verify Cinna can save bug reports and feature ideas via function calling.
+- [ ] **Step 3.4: Multi-Language Loop** (Verify language detection & response)
+    - [ ] **Test 3.4:** Unit tests for language detection prompts; manual multi-language voice tests.
 
 ### Phase 4: Deployment & Webhooks
 - [ ] **Step 4.1: Hono Webhook Server** (Local verification via ngrok)
@@ -49,12 +51,14 @@ Cinna is a modular Telegram assistant using **Gemini 3 Flash** for intent routin
 3. **Multi-Language:** The `Brain` MUST detect the input language and the bot MUST respond in that same language.
 4. **Verified Steps:** Never move to the next checkbox until the current one is verified as per `CINNA_PLAN.md`.
 5. **CI/CD Driven:** No code is merged without passing the GitHub Actions CI pipeline.
-6. **Modern Standards:** Always prioritize modern, non-legacy implementations and APIs (e.g., avoid deprecated library methods).
+6. **Modern Standards:** Always prioritize modern, non-legacy implementations and APIs.
+7. **SDK Mandate:** ALWAYS use the new `@google/genai` library. NEVER use or refer to the deprecated `@google/generative-ai` package. Since AI models may have outdated internal knowledge of this new SDK, always refer to the latest documentation or existing codebase patterns for correct implementation.
 
 ## 📦 Core Stack
 - **Runtime:** Bun
 - **Framework:** Telegraf (Telegram), Hono (Web)
-- **AI:** Google Generative AI (Gemini 3 Flash)
+- **AI:** Google Generative AI (`@google/genai`, Gemini 3 Flash)
+- **Database:** Firestore (Persistence)
 - **Validation:** Zod (Config)
 - **Testing:** bun:test
 - **CI/CD:** GitHub Actions (Setup-Bun)

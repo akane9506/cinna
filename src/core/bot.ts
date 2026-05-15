@@ -13,7 +13,8 @@ bot.use(whitelistMiddleware);
 export const handleTextMessage = async (ctx: Context) => {
   if (ctx.has(message('text'))) {
     try {
-      const response = await generateCompletion(ctx.message.text);
+      const chatId = ctx.chat?.id.toString() || 'unknown';
+      const response = await generateCompletion(ctx.message.text, chatId);
       await ctx.reply(response);
     } catch (error) {
       logger.error({ error, text: ctx.message.text }, 'Bot Error (Text)');
