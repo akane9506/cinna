@@ -1,12 +1,10 @@
 import { z } from "zod";
 
-// GenAI
-export const DEFAULT_GENAI_MODEL = "gemini-3.1-flash-lite";
-
 // Environment variables
 const configSchema = z.object({
   TELEGRAM_BOT_TOKEN: z.string(),
   GEMINI_API_KEY: z.string(),
+  GEMINI_MODEL: z.string().default("gemini-3.1-flash-lite"),
   ALLOWED_USERS: z
     .string()
     .transform((val) => val.split(",").map((id) => parseInt(id.trim(), 10))),
@@ -14,6 +12,8 @@ const configSchema = z.object({
   NODE_ENV: z
     .enum(["development", "production", "test"])
     .default("development"),
+  MAX_SESSIONS: z.coerce.number().default(10),
+  MAX_HISTORY_MESSAGES: z.coerce.number().default(40),
 });
 
 const parsedConfig = configSchema.safeParse(Bun.env);
@@ -37,9 +37,12 @@ if (!parsedConfig.success) {
     configData = {
       TELEGRAM_BOT_TOKEN: "test_token",
       GEMINI_API_KEY: "test_key",
+      GEMINI_MODEL: "gemini-3.1-flash-lite",
       ALLOWED_USERS: [12345], // Default test user ID
       PORT: "3000",
       NODE_ENV: "test",
+      MAX_SESSIONS: 1000,
+      MAX_HISTORY_MESSAGES: 20,
     };
   } else {
     process.exit(1);
