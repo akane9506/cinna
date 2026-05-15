@@ -33,11 +33,3 @@ export const handleVoiceMessage = async (ctx: Context) => {
 
 bot.on(message("text"), handleTextMessage);
 bot.on(message("voice"), handleVoiceMessage);
-
-const shutdown = (signal: string) => {
-  logger.info(`Shutting down via ${signal}...`);
-  bot.stop(signal);
-};
-
-process.once("SIGINT", () => shutdown("SIGINT"));
-process.once("SIGTERM", () => shutdown("SIGTERM"));
