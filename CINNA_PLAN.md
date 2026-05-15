@@ -41,7 +41,7 @@ cinna/
 
 ### Production Dependencies
 - **`telegraf`**: Modern Telegram Bot Framework.
-- **`@google/generative-ai`**: Google's official SDK for Gemini.
+- **`@google/genai`**: Google's official unified SDK for Gemini 2.0+.
 - **`zod`**: TypeScript-first schema validation for environment variables.
 - **`hono`**: Ultrafast web framework for the edge and Cloud Run.
 - **`fetch`**: Built-in Bun API to download voice files from Telegram's file server.
@@ -68,7 +68,25 @@ Triggered on merge to `main` or specific tags.
 
 ---
 
-## 4. Granular Implementation Roadmap
+## 5. Personality & Memory Strategy
+
+### Personality (The "Cinna" Vibe)
+- **System Instruction:** All calls to Gemini will include a dedicated `systemInstruction` to define Cinna's persona.
+- **Traits:** Helpful, efficient, slightly witty, and context-aware. 
+- **Language Parity:** Cinna must respond in the same language detected in the user's input.
+
+### Memory Implementation
+1. **Short-Term (Conversation Thread):**
+   - Use an in-memory `Map` (keyed by `chatId`) to store the last 10-20 turns of conversation.
+   - Pass this history to the `contents` array in the Gemini API call.
+2. **Long-Term (User Preferences):**
+   - Implement "Agentic Memory" via Function Calling.
+   - Tools like `save_user_preference(key, value)` and `get_user_preferences()` will allow Cinna to persist important details (e.g., dietary restrictions, preferred stores).
+   - *Storage:* Initially a local JSON/File-based store, migratable to a Database in Phase 4.
+
+---
+
+## 6. Granular Implementation Roadmap
 
 ### Phase 1: Infrastructure & Basic Connectivity
 *   **Step 1.1: Project Initialization**
@@ -89,17 +107,20 @@ Triggered on merge to `main` or specific tags.
 
 ### Phase 2: Core Brain (Gemini Integration)
 *   **Step 2.1: Simple Gemini Text Completion**
-    *   Integration with `@google/generative-ai`.
+    *   Integration with `@google/genai`.
     *   Wire up `src/core/bot.ts` to use Gemini for text replies.
     *   *Verification:* 
         - [ ] Test: Mock API call to Gemini and verify handling of the response.
         - [ ] Manual (CLI): Run a CLI test script (`scripts/test-gemini.ts`) that prints a Gemini completion to the console.
         - [ ] Manual (Telegram): Send "Hello" to the bot in Telegram and receive an AI-generated greeting.
-*   **Step 2.2: Text Intent Routing**
+*   **Step 2.2: Text Intent Routing & Memory**
     *   Implement `Brain` service for structured intent classification (JSON output).
+    *   Integrate `systemInstruction` for personality.
+    *   Implement basic in-memory session tracking for short-term context.
     *   *Verification:* 
         - [ ] Test: Unit tests with various inputs (Grocery vs Other) and mocked Gemini output.
-        - [ ] Manual: Send "/test_route buy milk" to the bot and verify it logs the "GROCERY" intent and detected language.
+        - [ ] Test: Verify that conversation history is correctly passed to the API.
+        - [ ] Manual: Send "/test_route buy milk" followed by "what did I just say?" to verify memory.
 *   **Step 2.3: Audio-to-Brain Link**
     *   Implement `audio.ts` to fetch and pass audio bytes to Gemini.
     *   *Verification:* 

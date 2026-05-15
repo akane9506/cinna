@@ -49,12 +49,13 @@ Cinna is a modular Telegram assistant using **Gemini 3 Flash** for intent routin
 3. **Multi-Language:** The `Brain` MUST detect the input language and the bot MUST respond in that same language.
 4. **Verified Steps:** Never move to the next checkbox until the current one is verified as per `CINNA_PLAN.md`.
 5. **CI/CD Driven:** No code is merged without passing the GitHub Actions CI pipeline.
-6. **Modern Standards:** Always prioritize modern, non-legacy implementations and APIs (e.g., avoid deprecated library methods).
+6. **Modern Standards:** Always prioritize modern, non-legacy implementations and APIs.
+7. **SDK Mandate:** ALWAYS use the new `@google/genai` library. NEVER use or refer to the deprecated `@google/generative-ai` package. Since AI models may have outdated internal knowledge of this new SDK, always refer to the latest documentation or existing codebase patterns for correct implementation.
 
 ## 📦 Core Stack
 - **Runtime:** Bun
 - **Framework:** Telegraf (Telegram), Hono (Web)
-- **AI:** Google Generative AI (Gemini 3 Flash)
+- **AI:** Google Generative AI (`@google/genai`, Gemini 3 Flash)
 - **Validation:** Zod (Config)
 - **Testing:** bun:test
 - **CI/CD:** GitHub Actions (Setup-Bun)
