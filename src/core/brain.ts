@@ -3,12 +3,8 @@ import { config } from "./config";
 import { logger } from "./logger";
 import { getPersona } from "./persona";
 
-const {
-  GEMINI_API_KEY,
-  GEMINI_MODEL,
-  MAX_SESSIONS,
-  MAX_HISTORY_MESSAGES,
-} = config;
+const { GEMINI_API_KEY, GEMINI_MODEL, MAX_SESSIONS, MAX_HISTORY_MESSAGES } =
+  config;
 
 const client = new GoogleGenAI({
   apiKey: GEMINI_API_KEY,

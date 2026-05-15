@@ -77,12 +77,12 @@ Triggered on merge to `main` or specific tags.
 
 ### Memory Implementation
 1. **Short-Term (Conversation Thread):**
-   - Use an in-memory `Map` (keyed by `chatId`) to store the last 10-20 turns of conversation.
-   - Pass this history to the `contents` array in the Gemini API call.
-2. **Long-Term (User Preferences):**
+   - Use an in-memory `Map` (keyed by `chatId`) with an LRU eviction strategy to store the last 10-20 turns.
+   - Pass this history to the Gemini API call.
+2. **Long-Term (User Data & Feedback):**
    - Implement "Agentic Memory" via Function Calling.
-   - Tools like `save_user_preference(key, value)` and `get_user_preferences()` will allow Cinna to persist important details (e.g., dietary restrictions, preferred stores).
-   - *Storage:* Initially a local JSON/File-based store, migratable to a Database in Phase 4.
+   - *Storage:* **Firestore** will be used to persist grocery lists, user preferences, and bot improvement feedback (bugs/suggestions).
+   - Cinna will have a dedicated tool to `record_bot_feedback(category, detail)` where `category` is 'bug' or 'improvement'.
 
 ---
 
@@ -127,19 +127,21 @@ Triggered on merge to `main` or specific tags.
         - [ ] Test: Integration test simulating audio download and Gemini processing.
         - [ ] Manual: Send a voice note "add eggs to my list" and verify the bot logs the correct transcription and intent.
 
-### Phase 3: The Grocery Module
-*   **Step 3.1: In-Memory List Logic**
-    *   `GroceryService` for state management.
-    *   *Verification:* 
-        - [ ] Test: 100% unit test coverage for `add`, `remove`, `list` methods.
-*   **Step 3.2: Tool Integration (Function Calling)**
-    *   Configure Gemini tools for grocery management.
-    *   *Verification:* 
-        - [ ] Test: End-to-end integration test (Mock Gemini -> Tool Call -> Service Update).
-*   **Step 3.3: Multi-Language Loop**
+### Phase 3: Modules & Persistence (Firestore)
+*   **Step 3.1: Firestore Service Integration**
+    *   Set up Firebase Admin SDK or Cloud Firestore SDK.
+    *   Implement a base `FirestoreService` for standardized CRUD operations.
+    *   *Verification:* [ ] Test: Integration test for basic read/write to a test collection.
+*   **Step 3.2: Persistent Grocery Module**
+    *   Refactor `GroceryService` to use Firestore.
+    *   *Verification:* [ ] Test: Verify grocery list persists across bot restarts.
+*   **Step 3.3: Feedback & Bug Tracker**
+    *   Implement a `feedback` module.
+    *   Define a tool for Gemini: `record_bot_feedback(category, detail)`.
+    *   *Verification:* [ ] Manual: Tell the bot "I found a bug: the audio is too slow", and verify it appears in the Firestore `feedback` collection.
+*   **Step 3.4: Multi-Language Loop**
     *   Refine system prompts for language parity.
-    *   *Verification:* 
-        - [ ] Manual: Multi-language voice note testing (FR, EN, ES, etc.).
+    *   *Verification:* [ ] Manual: Multi-language voice note testing (FR, EN, ES, etc.).
 
 ### Phase 4: Deployment & Webhooks
 *   **Step 4.1: Hono Webhook Server**
