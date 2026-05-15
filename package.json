@@ -6,6 +6,7 @@
   "scripts": {
     "start": "bun src/index.ts",
     "dev": "bun --hot src/index.ts",
+    "test": "bun test:isolate",
     "test:isolate": "bun test --isolate",
     "test:coverage": "bun test --isolate --coverage",
     "lint": "eslint 'src/**/*.ts'"
