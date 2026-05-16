@@ -101,6 +101,62 @@ Phase 4 is deployment-oriented:
 - Docker/Cloud Run packaging.
 - Production deployment workflow.
 
+## Planned Firestore Shape
+
+Start with the simplest useful grocery model: one grocery list document per
+shop, scoped under the Telegram user. If the user does not provide a shop, use
+`default`.
+
+```text
+users/{userId}/groceryLists/{shopName}
+```
+
+Use a normalized shop name as the document id:
+
+- No shop provided: `default`
+- `Costco`: `costco`
+- `Trader Joe's`: `trader-joes`
+
+Keep the document shape compact:
+
+```ts
+type Timestamp = FirebaseFirestore.Timestamp;
+
+export interface GroceryListItem {
+  name: string; // "两箱全脂牛奶(milk)"
+  addedAt: Timestamp;
+}
+
+export interface GroceryListDoc {
+  shopName: string; // display name, e.g. "Costco" or "default"
+  items: GroceryListItem[];
+  lastUpdated: Timestamp;
+}
+```
+
+Normalize document ids before writing:
+
+```ts
+function normalizeShopId(shopName?: string): string {
+  if (!shopName?.trim()) return "default";
+
+  return shopName
+    .trim()
+    .toLowerCase()
+    .replaceAll("/", "-")
+    .replace(/\s+/g, "-");
+}
+```
+
+## Functional Requirements
+
+- Grocery list retrieval: when the user asks to view a grocery list, Cinna
+  should first reply with the requested list contents.
+- Grocery retention prompt: after replying with a requested grocery list, Cinna
+  should check whether the list or any items are older than one month. If stale
+  data exists, send a separate follow-up message asking whether the user wants
+  to delete it. Do not delete stale data automatically.
+
 ## Coding Style
 
 - TypeScript, ESM, strict mode.
