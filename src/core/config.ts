@@ -13,7 +13,7 @@ const configSchema = z.object({
     .enum(["development", "production", "test"])
     .default("development"),
   MAX_SESSIONS: z.coerce.number().default(10),
-  MAX_HISTORY_MESSAGES: z.coerce.number().default(40),
+  MAX_HISTORY_MESSAGES: z.coerce.number().default(100),
 });
 
 const parsedConfig = configSchema.safeParse(Bun.env);

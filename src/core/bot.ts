@@ -4,6 +4,7 @@ import { config } from "./config";
 import { generateCompletion } from "./brain";
 import { logger } from "./logger";
 import { whitelistMiddleware } from "./middleware";
+import { dispatchIntent } from "./dispatcher";
 
 export const bot = new Telegraf(config.TELEGRAM_BOT_TOKEN);
 
@@ -15,8 +16,12 @@ export const handleTextMessage = async (ctx: Context) => {
     try {
       const chatId = ctx.chat?.id.toString() || "unknown";
       await ctx.persistentChatAction("typing", async () => {
-        const response = await generateCompletion(ctx.message.text, chatId);
-        await ctx.reply(response);
+        const brainResponse = await generateCompletion(
+          ctx.message.text,
+          chatId,
+        );
+        // Use dispatcher to handle intent-specific logic and reply
+        await dispatchIntent(ctx, brainResponse);
       });
     } catch (error) {
       logger.error({ error, text: ctx.message.text }, "Bot Error (Text)");
