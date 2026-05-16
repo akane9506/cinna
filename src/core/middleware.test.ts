@@ -43,7 +43,7 @@ describe("middleware.ts - whitelistMiddleware", () => {
 
     expect(mockNext).not.toHaveBeenCalled();
     expect(mockReply).toHaveBeenCalledWith(
-      "Sorry, I am only a personal agent that is not publicly available."
+      "Sorry, I am only a personal agent that is not publicly available.",
     );
   });
 

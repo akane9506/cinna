@@ -51,7 +51,7 @@ const setHistory = (chatId: string, history: Content[]): void => {
  */
 const truncateHistory = (history: Content[]): Content[] => {
   if (history.length <= MAX_HISTORY_MESSAGES) return history;
-  
+
   let truncated = history.slice(-MAX_HISTORY_MESSAGES);
   // Ensure history starts with a user message
   while (truncated.length > 0 && truncated[0].role !== "user") {
@@ -91,31 +91,34 @@ export const generateCompletion = async (
     });
 
     const responseText = response.text || "";
-    
+
     let brainResponse: BrainResponse;
     try {
       brainResponse = BrainResponseSchema.parse(JSON.parse(responseText));
-      
+
       // Update history with the model's response if parsing succeeded
       const updatedHistory = [
         ...contents,
-        { role: "model", parts: [{ text: responseText }] },
+        { role: "model", parts: [{ text: brainResponse.reply }] }, // only preserve the reply text, to avoid context explosion
       ];
       setHistory(chatId, truncateHistory(updatedHistory));
-
     } catch (parseError) {
-      logger.error({ responseText, parseError }, "Gemini Schema Validation Failed");
-      
+      logger.error(
+        { responseText, parseError },
+        "Gemini Schema Validation Failed",
+      );
+
       // Fallback response
       brainResponse = {
         intent: "OTHER",
         language: "unknown",
-        reply: responseText || "I'm sorry, I'm having a little trouble understanding. Could you say that again? (u･ω･u)",
+        reply:
+          responseText ||
+          "I'm sorry, I'm having a little trouble understanding. Could you say that again? (u･ω･u)",
       };
     }
 
     return brainResponse;
-
   } catch (error) {
     logger.error({ error, prompt, chatId }, "Gemini API failure");
     throw new Error("Failed to generate completion from Gemini", {

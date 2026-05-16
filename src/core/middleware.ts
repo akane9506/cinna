@@ -11,7 +11,9 @@ export const whitelistMiddleware: MiddlewareFn<Context> = async (ctx, next) => {
   if (!userId || !config.ALLOWED_USERS.includes(userId)) {
     // We only reply if it's an interaction we can reply to
     if (ctx.chat) {
-      await ctx.reply("Sorry, I am only a personal agent that is not publicly available.");
+      await ctx.reply(
+        "Sorry, I am only a personal agent that is not publicly available.",
+      );
     }
     return; // Stop the middleware chain
   }

@@ -5,11 +5,13 @@ Cinna is a modular Telegram assistant powered by Gemini 3 Flash and Hono.
 ## 🚀 Local Setup
 
 ### 1. Create your Telegram Bot
+
 1. Open Telegram and search for [@BotFather](https://t.me/botfather).
 2. Use the `/newbot` command to create a new bot and get your **API Token**.
 3. Search for your bot's username and click **Start**.
 
 ### 2. Configure Environment Variables
+
 1. Create a `.env` file based on `.env.example`:
    ```bash
    cp .env.example .env
@@ -22,6 +24,7 @@ Cinna is a modular Telegram assistant powered by Gemini 3 Flash and Hono.
    - `NODE_ENV`: development.
 
 ### 3. Install & Run
+
 ```bash
 # Install dependencies
 bun install

@@ -63,9 +63,14 @@ describe("brain.ts", () => {
       action: "add",
       shop: "Costco",
     });
-    mockGenerateContent.mockImplementationOnce(async () => ({ text: groceryJson }));
+    mockGenerateContent.mockImplementationOnce(async () => ({
+      text: groceryJson,
+    }));
 
-    const response = await generateCompletion("买两箱全脂牛奶 at Costco", "chat-grocery");
+    const response = await generateCompletion(
+      "买两箱全脂牛奶 at Costco",
+      "chat-grocery",
+    );
     expect(response.intent).toBe("GROCERY");
     expect(response.item).toBe("两箱全脂牛奶(milk)");
     expect(response.shop).toBe("Costco");
@@ -80,9 +85,14 @@ describe("brain.ts", () => {
       item: "两箱全脂牛奶(milk)",
       action: "modify",
     });
-    mockGenerateContent.mockImplementationOnce(async () => ({ text: modifyJson }));
+    mockGenerateContent.mockImplementationOnce(async () => ({
+      text: modifyJson,
+    }));
 
-    const response = await generateCompletion("把牛奶改成两箱全脂牛奶", "chat-modify");
+    const response = await generateCompletion(
+      "把牛奶改成两箱全脂牛奶",
+      "chat-modify",
+    );
     expect(response.intent).toBe("GROCERY");
     expect(response.item).toBe("两箱全脂牛奶(milk)");
     expect(response.action).toBe("modify");
@@ -94,7 +104,9 @@ describe("brain.ts", () => {
       language: "en",
       reply: "Clean response",
     });
-    mockGenerateContent.mockImplementationOnce(async () => ({ text: cleanJson }));
+    mockGenerateContent.mockImplementationOnce(async () => ({
+      text: cleanJson,
+    }));
 
     const response = await generateCompletion("hello", "chat-clean");
     expect(response.intent).toBe("OTHER");
@@ -103,9 +115,15 @@ describe("brain.ts", () => {
 
   it("should maintain history in subsequent calls", async () => {
     await generateCompletion("first message", "chat-history");
-    const jsonReply = JSON.stringify({ intent: "OTHER", language: "en", reply: "reply 1" });
-    mockGenerateContent.mockImplementationOnce(async () => ({ text: jsonReply }));
-    
+    const jsonReply = JSON.stringify({
+      intent: "OTHER",
+      language: "en",
+      reply: "reply 1",
+    });
+    mockGenerateContent.mockImplementationOnce(async () => ({
+      text: jsonReply,
+    }));
+
     await generateCompletion("second message", "chat-history");
 
     expect(mockGenerateContent).toHaveBeenCalledTimes(2);
@@ -123,7 +141,9 @@ describe("brain.ts", () => {
       await generateCompletion("error prompt", "chat-err");
       expect(true).toBe(false);
     } catch (error: any) {
-      expect(error.message).toContain("Failed to generate completion from Gemini");
+      expect(error.message).toContain(
+        "Failed to generate completion from Gemini",
+      );
     }
   });
 });
