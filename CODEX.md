@@ -87,19 +87,21 @@ These are current improvement candidates, not blockers for every change:
 ## Roadmap Alignment
 
 Follow the roadmap and status checklist in `CINNA_PLAN.md`. The next major
-unfinished work is Phase 3:
+unfinished work is Phase 3, the grocery MVP persistence track:
 
 - Firebase/Admin initialization.
-- Persistent grocery module.
-- Audio-to-brain link.
-- Feedback module.
-- Multi-language verification.
+- Grocery domain model and Firestore repository.
+- Grocery-specific LLM planner for DB-safe commands.
+- Persistent grocery handler wired through the dispatcher.
 
-Phase 4 is deployment-oriented:
+After the grocery MVP works locally, Phase 4 is the online launch track:
 
 - Hono webhook server.
 - Docker/Cloud Run packaging.
 - Production deployment workflow.
+- Production grocery smoke test.
+
+Audio, feedback, and broader multi-language polish are Phase 5 post-launch work.
 
 ## Planned Firestore Shape
 

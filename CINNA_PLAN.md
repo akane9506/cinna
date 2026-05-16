@@ -171,11 +171,11 @@ The goal of this phase is to finish the persistent grocery function end to end. 
 - **Step 3.2: Grocery Domain Model & Firestore Repository**
   - Implement `src/modules/grocery/types.ts` with Zod schemas for grocery items, planner commands, and operation results.
   - Implement a Firestore repository that stores active grocery items under user-scoped lists.
-  - Recommended collection shape:
+  - Recommended document shape:
     ```text
-    users/{telegramUserId}/groceryLists/{shopOrDefault}/items/{itemId}
+    users/{telegramUserId}/groceryLists/{shopOrDefault}
     ```
-  - Store structured item fields such as display name, canonical name, quantity/notes when available, shop, status, and timestamps.
+  - Store `shopName`, an `items` array, and `lastUpdated`; each item should contain `name` and `addedAt`.
   - _Verification:_ [ ] Repository unit tests cover add, list, update, remove, and clear using a mocked Firestore adapter.
 - **Step 3.3: Grocery LLM Planner**
   - Implement `src/modules/grocery/planner.ts` as a grocery-specific LLM service using `@google/genai`.
