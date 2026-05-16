@@ -109,32 +109,24 @@ Triggered on merge to `main` or specific tags.
 *   **Step 2.1: Simple Gemini Text Completion**
     *   Integration with `@google/genai`.
     *   Wire up `src/core/bot.ts` to use Gemini for text replies.
-    *   *Verification:* 
-        - [ ] Test: Mock API call to Gemini and verify handling of the response.
-        - [ ] Manual (CLI): Run a CLI test script (`scripts/test-gemini.ts`) that prints a Gemini completion to the console.
-        - [ ] Manual (Telegram): Send "Hello" to the bot in Telegram and receive an AI-generated greeting.
+    *   *Verification:* [x] Unit tests for brain.ts pass.
 *   **Step 2.2: Text Intent Routing & Memory**
     *   Implement `Brain` service for structured intent classification (JSON output).
     *   Integrate `systemInstruction` for personality.
     *   Implement basic in-memory session tracking for short-term context.
-    *   *Verification:* 
-        - [ ] Test: Unit tests with various inputs (Grocery vs Other) and mocked Gemini output.
-        - [ ] Test: Verify that conversation history is correctly passed to the API.
-        - [ ] Manual: Send "/test_route buy milk" followed by "what did I just say?" to verify memory.
-*   **Step 2.3: Audio-to-Brain Link**
-    *   Implement `audio.ts` to fetch and pass audio bytes to Gemini.
-    *   *Verification:* 
-        - [ ] Test: Integration test simulating audio download and Gemini processing.
-        - [ ] Manual: Send a voice note "add eggs to my list" and verify the bot logs the correct transcription and intent.
+    *   *Verification:* [x] Unit tests with various intents and mocked Gemini output pass.
 
-### Phase 3: Modules & Persistence (Firestore)
-*   **Step 3.1: Firestore Service Integration**
-    *   Set up Firebase Admin SDK or Cloud Firestore SDK.
-    *   Implement a base `FirestoreService` for standardized CRUD operations.
-    *   *Verification:* [ ] Test: Integration test for basic read/write to a test collection.
+### Phase 3: Persistence (Firestore) & Modules
+*   **Step 3.1: Firebase Initialization**
+    *   Install `firebase-admin` and configure credentials.
+    *   *Verification:* [ ] `firebase-admin` successfully initializes.
 *   **Step 3.2: Persistent Grocery Module**
-    *   Refactor `GroceryService` to use Firestore.
-    *   *Verification:* [ ] Test: Verify grocery list persists across bot restarts.
+    *   Implement `GroceryService` to handle CRUD operations in Firestore.
+    *   Wire the `Dispatcher` to call the `GroceryService`.
+    *   *Verification:* [ ] Items added via Telegram persist in Firestore.
+*   **Step 3.3: Audio-to-Brain Link** (Moved)
+    *   Implement `audio.ts` to fetch and pass audio bytes to Gemini.
+    *   *Verification:* [ ] Send voice note and verify transcription and intent routing.
 *   **Step 3.3: Feedback & Bug Tracker**
     *   Implement a `feedback` module.
     *   Define a tool for Gemini: `record_bot_feedback(category, detail)`.

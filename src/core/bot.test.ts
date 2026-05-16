@@ -6,11 +6,23 @@ const mockReply = mock(async () => {});
 const mockPersistentChatAction = mock(async (action: string, cb: () => Promise<void>) => {
   await cb();
 });
-const mockGenerateCompletion = mock(async () => "mock response");
+const mockBrainResponse = {
+  intent: "OTHER",
+  language: "en",
+  reply: "mock response",
+};
+const mockGenerateCompletion = mock(async () => mockBrainResponse);
+const mockDispatchIntent = mock(async (ctx: any, response: any) => {
+  await ctx.reply(response.reply);
+});
 
 // Mock dependencies
 mock.module("./brain", () => ({
   generateCompletion: mockGenerateCompletion,
+}));
+
+mock.module("./dispatcher", () => ({
+  dispatchIntent: mockDispatchIntent,
 }));
 
 mock.module("./logger", () => ({
