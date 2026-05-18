@@ -167,7 +167,7 @@ The goal of this phase is to finish the persistent grocery function end to end. 
 - **Step 3.1: Firebase Initialization**
   - Install `firebase-admin` and configure credentials.
   - Add a Firestore initialization module that can be mocked in tests.
-  - _Verification:_ [ ] `firebase-admin` successfully initializes in development and is bypassed/mocked in tests.
+  - _Verification:_ [x] `firebase-admin` initializes via explicit project/database config and repository tests use a mocked store.
 - **Step 3.2: Grocery Domain Model & Firestore Repository**
   - Implement `src/modules/grocery/types.ts` with Zod schemas for grocery items, planner commands, and operation results.
   - Implement a Firestore repository that stores active grocery items under user-scoped lists.
@@ -175,25 +175,37 @@ The goal of this phase is to finish the persistent grocery function end to end. 
     ```text
     users/{telegramUserId}/groceryLists/{shopOrDefault}
     ```
-  - Store `shopName`, an `items` array, and `lastUpdated`; each item should contain `name` and `addedAt`.
-  - _Verification:_ [ ] Repository unit tests cover add, list, update, remove, and clear using a mocked Firestore adapter.
-- **Step 3.3: Grocery LLM Planner**
-  - Implement `src/modules/grocery/planner.ts` as a grocery-specific LLM service using `@google/genai`.
-  - Input should include the original user text, the core `BrainResponse`, user/chat identifiers, optional shop, and current list state when needed.
-  - Output must be strict JSON validated by Zod before any side effect. The planner should return DB commands, not user-facing prose.
-  - Supported planner commands:
-    - `add_item`
-    - `remove_item`
-    - `update_item`
-    - `list_items`
-    - `clear_list`
-  - _Verification:_ [ ] Planner tests mock Gemini output and reject malformed or unsupported commands before execution.
-- **Step 3.4: Persistent Grocery Handler**
-  - Implement `src/modules/grocery/handler.ts` to orchestrate current state loading, planner invocation, service execution, and final reply composition.
-  - Update `Dispatcher` so the `GROCERY` case calls the grocery handler instead of writing `brainResponse.item` directly to storage.
-  - Build `list` responses from Firestore results, not from Gemini-generated text.
-  - For add/update/remove/clear, reply from operation results and preserve the user's detected language/persona tone.
-  - _Verification:_ [ ] Items added/updated/removed via Telegram persist correctly in Firestore, and list replies reflect actual stored data.
+  - Store `shopName`, an `items` array, and `lastUpdated` as epoch milliseconds; each item should contain `name` and `addedAt` as epoch milliseconds.
+  - _Verification:_ [x] Repository unit tests cover add, list, update, remove, and clear using a mocked Firestore adapter.
+- **Step 3.3.1: End-to-End `add_item` Slice**
+  - Implement only enough planner, service, handler, dispatcher wiring, and reply formatting for `add_item`.
+  - The full path must be: Telegram text -> core Brain routes `GROCERY` -> grocery planner returns validated `add_item` -> service calls `repository.addItem` -> Firestore is updated -> bot replies from the repository result.
+  - Keep unsupported grocery actions explicitly unimplemented or safely rejected in this slice.
+  - _Verification:_ [ ] Unit tests cover `add_item` planner parsing, command execution, reply formatting, handler orchestration, and dispatcher routing.
+  - _Verification:_ [ ] Manual Telegram test adds one item to the configured development Firestore database and the bot replies with the persisted item/shop.
+- **Step 3.3.2: End-to-End `list_items` Slice**
+  - Extend the planner, service, handler, dispatcher tests, and replies for `list_items`.
+  - List replies must be built from Firestore results, not Gemini-generated prose.
+  - _Verification:_ [ ] Unit tests cover `list_items` planning/execution/reply behavior for empty and non-empty lists.
+  - _Verification:_ [ ] Manual Telegram test lists the item added in Step 3.3.1 from the configured development Firestore database.
+- **Step 3.3.3: End-to-End `remove_item` Slice**
+  - Extend the same path for `remove_item`.
+  - Missing-item behavior should be explicit and user-facing.
+  - _Verification:_ [ ] Unit tests cover successful removal and missing-item results.
+  - _Verification:_ [ ] Manual Telegram test removes an item from Firestore and confirms the reply reflects the repository result.
+- **Step 3.3.4: End-to-End `update_item` Slice**
+  - Extend the same path for `update_item`.
+  - Use current list state as planner context when needed so rename/update requests target existing items safely.
+  - _Verification:_ [ ] Unit tests cover successful update and missing-item results.
+  - _Verification:_ [ ] Manual Telegram test updates an item in Firestore and confirms the reply/list reflect the new item name.
+- **Step 3.3.5: End-to-End `clear_list` Slice**
+  - Extend the same path for `clear_list`.
+  - Clearing should reply from the repository result and make the final stored list empty.
+  - _Verification:_ [ ] Unit tests cover clearing non-empty and already-empty lists.
+  - _Verification:_ [ ] Manual Telegram test clears the development Firestore list and confirms a follow-up list is empty.
+- **Step 3.3.6: Full Grocery Smoke Test**
+  - Add a manual smoke script or checklist that runs add, list, update, remove, and clear against configured `FIREBASE_PROJECT_ID` and `FIRESTORE_DATABASE_ID`.
+  - _Verification:_ [ ] Smoke flow passes against the development Firestore database and leaves predictable test data.
 
 ### Phase 4: Online Launch
 
