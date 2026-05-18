@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { bot } from "./core/bot";
 import { config } from "./core/config";
+import { getFirestoreDb } from "./core/firestore";
 
 import { logger } from "./core/logger";
 
@@ -9,6 +10,13 @@ const app = new Hono();
 app.get("/", (c) => c.text("Cinna is alive!"));
 
 console.log("Cinna is starting...");
+
+try {
+  getFirestoreDb();
+} catch (error) {
+  logger.error({ error }, "Failed to initialize Firestore");
+  process.exit(1);
+}
 
 // Launch bot (Long Polling)
 bot
