@@ -26,6 +26,7 @@
   "homepage": "https://github.com/akane9506/cinna#readme",
   "dependencies": {
     "@google/genai": "^2.2.0",
+    "firebase-admin": "^13.10.0",
     "hono": "^4.12.18",
     "pino": "^10.3.1",
     "telegraf": "^4.16.3",
