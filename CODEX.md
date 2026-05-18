@@ -16,6 +16,10 @@ The current implementation supports:
 - Text message handling through the core brain.
 - Gemini structured JSON responses validated with Zod.
 - Short-term in-memory chat history with bounded sessions.
+- Firebase Admin initialization for Firestore with explicit project/database
+  configuration and startup logging.
+- Grocery schemas and a tested Firestore repository foundation for add, list,
+  update, remove, and clear operations.
 - Placeholder voice message handling.
 - Placeholder grocery and feedback dispatch paths.
 
@@ -29,8 +33,15 @@ The current implementation supports:
   generation, schema validation, and chat history.
 - `src/core/dispatcher.ts`: Intent dispatch boundary. Currently logs grocery
   and feedback intents, then replies to the user.
+- `src/core/firestore.ts`: Firebase Admin initialization and Firestore database
+  selection. Logs project ID, database ID, credential mode, and whether an
+  existing Firebase app was reused.
 - `src/core/types.ts`: Zod schema and TypeScript types for brain responses.
 - `src/core/persona.md`: Local persona/system prompt source.
+- `src/modules/grocery/types.ts`: Grocery list, item, planner command, and
+  operation result schemas.
+- `src/modules/grocery/repository.ts`: Firestore-backed grocery repository with
+  injected store support for tests.
 
 Future feature modules should live under `src/modules/{feature_name}`.
 
@@ -87,12 +98,15 @@ These are current improvement candidates, not blockers for every change:
 ## Roadmap Alignment
 
 Follow the roadmap and status checklist in `CINNA_PLAN.md`. The next major
-unfinished work is Phase 3, the grocery MVP persistence track:
+unfinished work is Phase 3, implemented as vertical end-to-end grocery action
+slices:
 
-- Firebase/Admin initialization.
-- Grocery domain model and Firestore repository.
-- Grocery-specific LLM planner for DB-safe commands.
-- Persistent grocery handler wired through the dispatcher.
+- First: `add_item` from Telegram text through planner, service, repository,
+  Firestore write, and user reply.
+- Then: `list_items`, `remove_item`, `update_item`, and `clear_list` as separate
+  verified slices.
+- Finish with a full grocery smoke flow against the configured development
+  Firestore database.
 
 After the grocery MVP works locally, Phase 4 is the online launch track:
 
@@ -122,17 +136,15 @@ Use a normalized shop name as the document id:
 Keep the document shape compact:
 
 ```ts
-type Timestamp = FirebaseFirestore.Timestamp;
-
 export interface GroceryListItem {
   name: string; // "两箱全脂牛奶(milk)"
-  addedAt: Timestamp;
+  addedAt: number; // epoch milliseconds
 }
 
 export interface GroceryListDoc {
   shopName: string; // display name, e.g. "Costco" or "default"
   items: GroceryListItem[];
-  lastUpdated: Timestamp;
+  lastUpdated: number; // epoch milliseconds
 }
 ```
 

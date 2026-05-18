@@ -19,9 +19,14 @@ Cinna is a modular Telegram assistant powered by Gemini 3 Flash and Hono.
 2. Fill in your credentials:
    - `TELEGRAM_BOT_TOKEN`: Your BotFather token.
    - `GEMINI_API_KEY`: Your Google AI Studio API Key.
+   - `FIREBASE_PROJECT_ID`: Firebase/GCP project ID.
+   - `FIRESTORE_DATABASE_ID`: Firestore database ID, such as `development` locally or `(default)` in production.
+   - `FIREBASE_SERVICE_ACCOUNT_PATH`: Optional local path to a Firebase service account JSON file, such as `.firebase/firebase-service-account-dev.json`.
    - `ALLOWED_USERS`: Comma-separated Telegram User IDs allowed to use the bot.
    - `PORT`: 3000 (default).
    - `NODE_ENV`: development.
+
+   Keep service account JSON files out of git. The repo ignores `.firebase/` for local credentials.
 
 ### 3. Install & Run
 
