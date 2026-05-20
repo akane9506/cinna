@@ -149,3 +149,4 @@ coverage/
 
 # Local Persona
 src/core/persona.md
+src/modules/grocery/prompts/*.md

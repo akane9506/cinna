@@ -1,6 +1,7 @@
 import { Context } from "telegraf";
 import { BrainResponse } from "./types";
 import { logger } from "./logger";
+import { handleGroceryIntent } from "../modules/grocery/handler";
 
 /**
  * Dispatcher for routing detected intents to their respective module handlers.
@@ -8,16 +9,14 @@ import { logger } from "./logger";
 export const dispatchIntent = async (
   ctx: Context,
   brainResponse: BrainResponse,
+  userText: string = "",
 ) => {
-  const { intent, reply, item, action, shop, detail, category } = brainResponse;
+  const { intent, reply, detail, category } = brainResponse;
 
   switch (intent) {
     case "GROCERY":
-      // Phase 3.2: Implement Grocery module logic here
-      if (item) {
-        logger.info({ item, action, shop }, "Grocery intent detected");
-      }
-      break;
+      await handleGroceryIntent(ctx, brainResponse, userText);
+      return;
 
     case "FEEDBACK":
       // Phase 3.3: Implement Feedback module logic here

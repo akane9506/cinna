@@ -20,8 +20,11 @@ The current implementation supports:
   configuration and startup logging.
 - Grocery schemas and a tested Firestore repository foundation for add, list,
   update, remove, and clear operations.
+- Grocery `add_item` flow uses Brain routing, a second structured grocery
+  planner call, Firestore writes, then a persona reply generated from persisted
+  results.
 - Placeholder voice message handling.
-- Placeholder grocery and feedback dispatch paths.
+- Placeholder feedback dispatch path.
 
 ## Current Architecture
 
@@ -31,8 +34,9 @@ The current implementation supports:
 - `src/core/middleware.ts`: Telegram user whitelist middleware.
 - `src/core/brain.ts`: Gemini client, persona loading, structured response
   generation, schema validation, and chat history.
-- `src/core/dispatcher.ts`: Intent dispatch boundary. Currently logs grocery
-  and feedback intents, then replies to the user.
+- `src/core/dispatcher.ts`: Intent dispatch boundary. Routes grocery intents to
+  the grocery module with the original user text, while general chat still uses
+  the Brain reply.
 - `src/core/firestore.ts`: Firebase Admin initialization and Firestore database
   selection. Logs project ID, database ID, credential mode, and whether an
   existing Firebase app was reused.
@@ -40,6 +44,10 @@ The current implementation supports:
 - `src/core/persona.md`: Local persona/system prompt source.
 - `src/modules/grocery/types.ts`: Grocery list, item, planner command, and
   operation result schemas.
+- `src/modules/grocery/planner.ts`: Grocery-specific structured LLM planner and
+  post-persistence persona reply generator.
+- `src/modules/grocery/handler.ts`: Grocery orchestration from planner commands
+  through repository writes and final reply.
 - `src/modules/grocery/repository.ts`: Firestore-backed grocery repository with
   injected store support for tests.
 
@@ -116,6 +124,19 @@ After the grocery MVP works locally, Phase 4 is the online launch track:
 - Production grocery smoke test.
 
 Audio, feedback, and broader multi-language polish are Phase 5 post-launch work.
+
+## Grocery LLM Pattern
+
+Do not write grocery data directly from the core Brain response. The expected
+flow is:
+
+```text
+user text -> Brain intent reply -> grocery planner structured commands
+-> repository writes -> persona reply from persisted results
+```
+
+This lets one user message produce multiple storage operations, such as adding
+several grocery items at once, while keeping replies grounded in saved data.
 
 ## Planned Firestore Shape
 
