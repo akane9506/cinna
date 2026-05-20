@@ -46,6 +46,7 @@ describe("bot.ts - handleTextMessage", () => {
     mockReply.mockClear();
     mockPersistentChatAction.mockClear();
     mockGenerateCompletion.mockClear();
+    mockDispatchIntent.mockClear();
   });
 
   it("should use persistentChatAction and reply with generated completion", async () => {
@@ -69,6 +70,11 @@ describe("bot.ts - handleTextMessage", () => {
       expect.any(Function),
     );
     expect(mockGenerateCompletion).toHaveBeenCalledWith("hello", "456");
+    expect(mockDispatchIntent).toHaveBeenCalledWith(
+      mockCtx,
+      mockBrainResponse,
+      "hello",
+    );
     expect(mockReply).toHaveBeenCalledWith("mock response");
   });
 

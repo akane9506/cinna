@@ -14,7 +14,7 @@ The system follows a "Brain & Modules" pattern:
 
 ### Grocery Dispatch Architecture
 
-Grocery requests use a two-stage LLM pipeline:
+Grocery requests use a staged LLM pipeline:
 
 ```text
 Telegram message
@@ -29,11 +29,14 @@ Telegram message
      - load current list state when needed
      - call Grocery Planner
   -> Grocery Planner
+     - run a second structured LLM pass
      - convert user text + BrainResponse + current state into strict DB commands
+     - split multi-item requests into multiple commands
   -> Grocery Service / Repository
      - validate and execute Firestore operations
   -> Reply
-     - build confirmation/list output from actual DB results
+     - generate persona reply from actual DB results after persistence succeeds
+     - use deterministic fallback if reply generation fails validation
 ```
 
 The core rule is: **the Brain routes; the Grocery Planner plans DB operations; the Repository persists.** Gemini-generated chat text must not be treated as the source of truth for Firestore writes.
@@ -183,6 +186,11 @@ The goal of this phase is to finish the persistent grocery function end to end. 
   - Keep unsupported grocery actions explicitly unimplemented or safely rejected in this slice.
   - _Verification:_ [ ] Unit tests cover `add_item` planner parsing, command execution, reply formatting, handler orchestration, and dispatcher routing.
   - _Verification:_ [ ] Manual Telegram test adds one item to the configured development Firestore database and the bot replies with the persisted item/shop.
+- **Step 3.3.1a: Replace Free-Form Shop with List Category**
+  - `shopName` is not reliable enough as a primary grouping field. Replace or supplement it with a broader planner-controlled category before building more grocery slices.
+  - Suggested initial categories: `grocery`, `pharmacy`, `pet_store`, `toy_shop`, `other`.
+  - Keep optional free-form shop/place text only as display metadata when the user explicitly names a store.
+  - _Verification:_ [ ] Planner/schema/repository tests cover category normalization, unknown category fallback to `other`, and preservation of explicit shop text as metadata.
 - **Step 3.3.2: End-to-End `list_items` Slice**
   - Extend the planner, service, handler, dispatcher tests, and replies for `list_items`.
   - List replies must be built from Firestore results, not Gemini-generated prose.

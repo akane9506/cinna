@@ -1,9 +1,9 @@
 import { GoogleGenAI, Content } from "@google/genai";
-import { zodToJsonSchema } from "zod-to-json-schema";
 import { config } from "./config";
 import { logger } from "./logger";
 import { getPersona } from "./persona";
 import { BrainResponse, BrainResponseSchema } from "./types";
+import { toGeminiJsonSchema } from "./jsonSchema";
 
 const { GEMINI_API_KEY, GEMINI_MODEL, MAX_SESSIONS, MAX_HISTORY_MESSAGES } =
   config;
@@ -86,7 +86,7 @@ export const generateCompletion = async (
       config: {
         systemInstruction: persona,
         responseMimeType: "application/json",
-        responseJsonSchema: zodToJsonSchema(BrainResponseSchema as any),
+        responseJsonSchema: toGeminiJsonSchema(BrainResponseSchema),
       },
     });
 

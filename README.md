@@ -2,6 +2,23 @@
 
 Cinna is a modular Telegram assistant powered by Gemini 3 Flash and Hono.
 
+## How Grocery Requests Flow
+
+Grocery commands use a staged flow: the core Brain first classifies the Telegram
+message, the grocery planner runs a second structured LLM pass to create one or
+more DB commands, the repository saves them to Firestore, then Cinna generates a
+persona reply from the persisted result.
+
+## Local Prompt Files
+
+Prompt files are local and git-ignored. Add or edit them here:
+
+- `src/core/persona.md`: Cinna's main persona.
+- `src/modules/grocery/prompts/planner.instruction.md`: grocery command planner.
+- `src/modules/grocery/prompts/reply.instruction.md`: grocery success reply.
+
+If a prompt file is missing, the app uses a small fallback instruction.
+
 ## 🚀 Local Setup
 
 ### 1. Create your Telegram Bot

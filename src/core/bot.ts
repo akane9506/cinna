@@ -21,7 +21,7 @@ export const handleTextMessage = async (ctx: Context) => {
           chatId,
         );
         // Use dispatcher to handle intent-specific logic and reply
-        await dispatchIntent(ctx, brainResponse);
+        await dispatchIntent(ctx, brainResponse, ctx.message.text);
       });
     } catch (error) {
       logger.error({ error, text: ctx.message.text }, "Bot Error (Text)");
