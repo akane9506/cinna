@@ -1,51 +1,55 @@
 import { Firestore } from "firebase-admin/firestore";
 import { getFirestoreDb } from "../../core/firestore";
 import {
-  GroceryItem,
-  GroceryListDoc,
-  GroceryListDocSchema,
-  GroceryOperationResult,
+  ShoppingItem,
+  ShoppingListDoc,
+  ShoppingListDocSchema,
+  ShoppingOperationResult,
+  ShoppingCategory,
+  ShoppingCategorySchema,
 } from "./types";
 
-export interface GroceryListStore {
-  getList(userId: string, shopId: string): Promise<GroceryListDoc | null>;
-  saveList(userId: string, shopId: string, list: GroceryListDoc): Promise<void>;
+export interface ShoppingListStore {
+  getList(
+    userId: string,
+    category: ShoppingCategory,
+  ): Promise<ShoppingListDoc | null>;
+  saveList(
+    userId: string,
+    category: ShoppingCategory,
+    list: ShoppingListDoc,
+  ): Promise<void>;
 }
 
-export const normalizeShopId = (shopName?: string): string => {
-  if (!shopName?.trim()) return "default";
-  return shopName
-    .trim()
-    .toLowerCase()
-    .replaceAll("/", "-")
-    .replace(/\s+/g, "-");
+export const normalizeShoppingCategory = (
+  category?: string,
+): ShoppingCategory => {
+  if (!category?.trim()) return "grocery";
+  return ShoppingCategorySchema.parse(category);
 };
 
-const getDisplayShopName = (shopName?: string): string =>
-  shopName?.trim() || "default";
-
-export const createFirestoreGroceryListStore = (
+export const createFirestoreShoppingListStore = (
   db: Firestore = getFirestoreDb(),
-): GroceryListStore => ({
-  async getList(userId, shopId) {
+): ShoppingListStore => ({
+  async getList(userId, category) {
     const snapshot = await db
-      .doc(`users/${userId}/groceryLists/${shopId}`)
+      .doc(`users/${userId}/shoppingLists/${category}`)
       .get();
     if (!snapshot.exists) return null;
-    return GroceryListDocSchema.parse(snapshot.data());
+    return ShoppingListDocSchema.parse(snapshot.data());
   },
 
-  async saveList(userId, shopId, list) {
-    const parsedList = GroceryListDocSchema.parse(list);
-    await db.doc(`users/${userId}/groceryLists/${shopId}`).set(parsedList, {
+  async saveList(userId, category, list) {
+    const parsedList = ShoppingListDocSchema.parse(list);
+    await db.doc(`users/${userId}/shoppingLists/${category}`).set(parsedList, {
       merge: true,
     });
   },
 });
 
-export class GroceryRepository {
+export class ShoppingRepository {
   constructor(
-    private readonly store: GroceryListStore = createFirestoreGroceryListStore(),
+    private readonly store: ShoppingListStore = createFirestoreShoppingListStore(),
   ) {}
 
   // The current strategy is that, with any updates, we overwrite the whole list,
@@ -53,35 +57,47 @@ export class GroceryRepository {
   async addItem(
     userId: string,
     itemName: string,
-    shopName?: string,
-  ): Promise<GroceryOperationResult> {
-    const list = await this.loadOrCreateList(userId, shopName);
+    category?: string,
+  ): Promise<ShoppingOperationResult> {
+    const results = await this.addItems(userId, [itemName], category);
+    return results[0];
+  }
+
+  async addItems(
+    userId: string,
+    itemNames: string[],
+    category?: string,
+  ): Promise<ShoppingOperationResult[]> {
+    const list = await this.loadOrCreateList(userId, category);
     const now = Date.now();
-    const item: GroceryItem = { name: itemName.trim(), addedAt: now };
+    const itemsToAdd = itemNames.map((itemName) => ({
+      name: itemName.trim(),
+      addedAt: now,
+    }));
     const updatedList = {
       ...list,
-      items: [...list.items, item],
+      items: [...list.items, ...itemsToAdd],
       lastUpdated: now,
     };
-    await this.saveList(userId, shopName, updatedList);
-    return {
+    await this.saveList(userId, updatedList.category, updatedList);
+    return itemsToAdd.map((item) => ({
       type: "add_item",
-      shopName: updatedList.shopName,
+      category: updatedList.category,
       items: updatedList.items,
       changed: true,
       itemName: item.name,
-    };
+    }));
   }
 
-  // get the grocery list by shopName. If name not provided, just return "default" list
+  // Get the shopping list by controlled category. Unknown categories fall back to "other".
   async listItems(
     userId: string,
-    shopName?: string,
-  ): Promise<GroceryOperationResult> {
-    const list = await this.loadOrCreateList(userId, shopName);
+    category?: string,
+  ): Promise<ShoppingOperationResult> {
+    const list = await this.loadOrCreateList(userId, category);
     return {
       type: "list_items",
-      shopName: list.shopName,
+      category: list.category,
       items: list.items,
       changed: false,
     };
@@ -93,14 +109,14 @@ export class GroceryRepository {
     userId: string,
     existingItemName: string,
     newItemName: string,
-    shopName?: string,
-  ): Promise<GroceryOperationResult> {
-    const list = await this.loadOrCreateList(userId, shopName);
+    category?: string,
+  ): Promise<ShoppingOperationResult> {
+    const list = await this.loadOrCreateList(userId, category);
     const index = this.findItemIndex(list.items, existingItemName);
     if (index === -1) {
       return {
         type: "update_item",
-        shopName: list.shopName,
+        category: list.category,
         items: list.items,
         changed: false,
         itemName: newItemName.trim(),
@@ -119,10 +135,10 @@ export class GroceryRepository {
       items: updatedItems,
       lastUpdated: now,
     };
-    await this.saveList(userId, shopName, updatedList);
+    await this.saveList(userId, updatedList.category, updatedList);
     return {
       type: "update_item",
-      shopName: updatedList.shopName,
+      category: updatedList.category,
       items: updatedList.items,
       changed: true,
       itemName: newItemName.trim(),
@@ -133,14 +149,14 @@ export class GroceryRepository {
   async removeItem(
     userId: string,
     itemName: string,
-    shopName?: string,
-  ): Promise<GroceryOperationResult> {
-    const list = await this.loadOrCreateList(userId, shopName);
+    category?: string,
+  ): Promise<ShoppingOperationResult> {
+    const list = await this.loadOrCreateList(userId, category);
     const index = this.findItemIndex(list.items, itemName);
     if (index === -1) {
       return {
         type: "remove_item",
-        shopName: list.shopName,
+        category: list.category,
         items: list.items,
         changed: false,
         itemName: itemName.trim(),
@@ -155,10 +171,10 @@ export class GroceryRepository {
       items: updatedItems,
       lastUpdated: now,
     };
-    await this.saveList(userId, shopName, updatedList);
+    await this.saveList(userId, updatedList.category, updatedList);
     return {
       type: "remove_item",
-      shopName: updatedList.shopName,
+      category: updatedList.category,
       items: updatedList.items,
       changed: true,
       itemName: itemName.trim(),
@@ -167,19 +183,19 @@ export class GroceryRepository {
 
   async clearList(
     userId: string,
-    shopName?: string,
-  ): Promise<GroceryOperationResult> {
-    const list = await this.loadOrCreateList(userId, shopName);
+    category?: string,
+  ): Promise<ShoppingOperationResult> {
+    const list = await this.loadOrCreateList(userId, category);
     const now = Date.now();
     const updatedList = {
       ...list,
       items: [],
       lastUpdated: now,
     };
-    await this.saveList(userId, shopName, updatedList);
+    await this.saveList(userId, updatedList.category, updatedList);
     return {
       type: "clear_list",
-      shopName: updatedList.shopName,
+      category: updatedList.category,
       items: updatedList.items,
       changed: list.items.length > 0,
     };
@@ -187,14 +203,14 @@ export class GroceryRepository {
 
   private async loadOrCreateList(
     userId: string,
-    shopName?: string,
-  ): Promise<GroceryListDoc> {
-    const shopId = normalizeShopId(shopName);
-    const list = await this.store.getList(userId, shopId);
+    category?: string,
+  ): Promise<ShoppingListDoc> {
+    const normalizedCategory = normalizeShoppingCategory(category);
+    const list = await this.store.getList(userId, normalizedCategory);
     if (list) return list;
     const now = Date.now();
     return {
-      shopName: getDisplayShopName(shopName),
+      category: normalizedCategory,
       items: [],
       lastUpdated: now,
     };
@@ -202,13 +218,13 @@ export class GroceryRepository {
 
   private async saveList(
     userId: string,
-    shopName: string | undefined,
-    list: GroceryListDoc,
+    category: ShoppingCategory,
+    list: ShoppingListDoc,
   ): Promise<void> {
-    await this.store.saveList(userId, normalizeShopId(shopName), list);
+    await this.store.saveList(userId, category, list);
   }
 
-  private findItemIndex(items: GroceryItem[], itemName: string): number {
+  private findItemIndex(items: ShoppingItem[], itemName: string): number {
     const normalizedName = itemName.trim().toLowerCase();
     return items.findIndex(
       (item) => item.name.trim().toLowerCase() === normalizedName,

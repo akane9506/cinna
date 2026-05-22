@@ -1,26 +1,48 @@
 import { describe, expect, it, mock } from "bun:test";
-import { createGroceryHandler } from "./handler";
+import { createShoppingHandler } from "./handler";
 
-describe("createGroceryHandler", () => {
+describe("createShoppingHandler", () => {
   it("plans and adds multiple items before replying with persisted details", async () => {
-    const addedItemNames = ["milk", "eggs"];
-    const addItem = mock(async () => ({
-      type: "add_item" as const,
-      shopName: "Costco",
-      items: [{ name: "milk", addedAt: 1 }],
-      changed: true,
-      itemName: addedItemNames.shift(),
-    }));
+    const addItems = mock(async () => [
+      {
+        type: "add_item" as const,
+        category: "grocery" as const,
+        items: [
+          { name: "milk", addedAt: 1 },
+          { name: "eggs", addedAt: 1 },
+        ],
+        changed: true,
+        itemName: "milk",
+      },
+      {
+        type: "add_item" as const,
+        category: "grocery" as const,
+        items: [
+          { name: "milk", addedAt: 1 },
+          { name: "eggs", addedAt: 1 },
+        ],
+        changed: true,
+        itemName: "eggs",
+      },
+    ]);
     const planner = mock(async () => ({
       commands: [
-        { type: "add_item" as const, itemName: "milk", shopName: "Costco" },
-        { type: "add_item" as const, itemName: "eggs", shopName: "Costco" },
+        {
+          type: "add_item" as const,
+          itemName: "milk",
+          category: "grocery" as const,
+        },
+        {
+          type: "add_item" as const,
+          itemName: "eggs",
+          category: "grocery" as const,
+        },
       ],
     }));
     const replyGenerator = mock(async () => "Saved with persona.");
     const reply = mock(async () => {});
-    const handler = createGroceryHandler(
-      { addItem } as any,
+    const handler = createShoppingHandler(
+      { addItems } as any,
       planner,
       replyGenerator,
     );
@@ -31,11 +53,10 @@ describe("createGroceryHandler", () => {
         reply,
       } as any,
       {
-        intent: "GROCERY",
+        intent: "SHOPPING",
         language: "en",
         reply: "AI reply should not be used.",
         action: "add",
-        shop: "Costco",
       },
       "add milk and eggs at Costco",
     );
@@ -43,30 +64,35 @@ describe("createGroceryHandler", () => {
     expect(planner).toHaveBeenCalledWith({
       userText: "add milk and eggs at Costco",
       brainResponse: {
-        intent: "GROCERY",
+        intent: "SHOPPING",
         language: "en",
         reply: "AI reply should not be used.",
         action: "add",
-        shop: "Costco",
       },
     });
-    expect(addItem).toHaveBeenCalledWith("123", "milk", "Costco");
-    expect(addItem).toHaveBeenCalledWith("123", "eggs", "Costco");
+    expect(addItems).toHaveBeenCalledTimes(1);
+    expect(addItems).toHaveBeenCalledWith("123", ["milk", "eggs"], "grocery");
     expect(replyGenerator).toHaveBeenCalledWith({
       userText: "add milk and eggs at Costco",
       language: "en",
       results: [
         {
           type: "add_item",
-          shopName: "Costco",
-          items: [{ name: "milk", addedAt: 1 }],
+          category: "grocery",
+          items: [
+            { name: "milk", addedAt: 1 },
+            { name: "eggs", addedAt: 1 },
+          ],
           changed: true,
           itemName: "milk",
         },
         {
           type: "add_item",
-          shopName: "Costco",
-          items: [{ name: "milk", addedAt: 1 }],
+          category: "grocery",
+          items: [
+            { name: "milk", addedAt: 1 },
+            { name: "eggs", addedAt: 1 },
+          ],
           changed: true,
           itemName: "eggs",
         },
@@ -76,16 +102,16 @@ describe("createGroceryHandler", () => {
   });
 
   it("safely rejects unsupported actions", async () => {
-    const addItem = mock(async () => {
+    const addItems = mock(async () => {
       throw new Error("should not be called");
     });
     const planner = mock(async () => ({
-      commands: [{ type: "list_items" as const, shopName: "Costco" }],
+      commands: [{ type: "list_items" as const, category: "grocery" as const }],
     }));
     const replyGenerator = mock(async () => "should not be called");
     const reply = mock(async () => {});
-    const handler = createGroceryHandler(
-      { addItem } as any,
+    const handler = createShoppingHandler(
+      { addItems } as any,
       planner,
       replyGenerator,
     );
@@ -96,7 +122,7 @@ describe("createGroceryHandler", () => {
         reply,
       } as any,
       {
-        intent: "GROCERY",
+        intent: "SHOPPING",
         language: "en",
         reply: "List groceries.",
         action: "list",
@@ -104,10 +130,10 @@ describe("createGroceryHandler", () => {
       "what is on my Costco list?",
     );
 
-    expect(addItem).not.toHaveBeenCalled();
+    expect(addItems).not.toHaveBeenCalled();
     expect(replyGenerator).not.toHaveBeenCalled();
     expect(reply).toHaveBeenCalledWith(
-      "That grocery action is not supported yet.",
+      "That shopping action is not supported yet.",
     );
   });
 });

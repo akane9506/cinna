@@ -1,45 +1,45 @@
 # Cinna: Implementation Roadmap
 
-Cinna is a modular, AI-powered Telegram assistant designed to handle voice and text inputs for various tasks, starting with grocery management. Powered by **Gemini 3 Flash**, it leverages frontier reasoning and agentic capabilities for seamless interaction.
+Cinna is a modular, AI-powered Telegram assistant designed to handle voice and text inputs for various tasks, starting with shopping-list management. Powered by **Gemini 3 Flash**, it leverages frontier reasoning and agentic capabilities for seamless interaction.
 
 ## 1. Modular Architecture
 
 The system follows a "Brain & Modules" pattern:
 
 - **Core Brain (Gemini 3 Flash):** Acts as the intent router and transcription engine, utilizing its pro-grade reasoning to handle complex requests.
-- **Feature Modules:** Independent logic for specific tasks (Grocery, Reminders, etc.).
-- **Domain Planners:** Module-specific LLM services convert conversational intent into validated, storage-safe commands. For grocery, the planner should produce DB operations such as `add_item`, `remove_item`, `update_item`, `list_items`, and `clear_list`.
+- **Feature Modules:** Independent logic for specific tasks (Shopping, Reminders, etc.).
+- **Domain Planners:** Module-specific LLM services convert conversational intent into validated, storage-safe commands. For shopping lists, the planner should produce DB operations such as `add_item`, `remove_item`, `update_item`, `list_items`, and `clear_list`.
 - **Persistence Layer:** Firestore repositories own reads/writes and keep storage details out of the dispatcher and LLM prompts.
 - **Response Engine:** Ensures responses match the user's input language and are grounded in actual operation results when persistence is involved.
 
-### Grocery Dispatch Architecture
+### Shopping Dispatch Architecture
 
-Grocery requests use a staged LLM pipeline:
+Shopping requests use a staged LLM pipeline:
 
 ```text
 Telegram message
   -> Core Brain
-     - classify intent as GROCERY / FEEDBACK / OTHER
+     - classify intent as SHOPPING / FEEDBACK / OTHER
      - detect language
      - preserve conversational context
   -> Dispatcher
-     - route GROCERY only
+     - route SHOPPING only
      - do not write chat content directly to Firestore
-  -> Grocery Handler
+  -> Shopping Handler
      - load current list state when needed
-     - call Grocery Planner
-  -> Grocery Planner
+     - call Shopping Planner
+  -> Shopping Planner
      - run a second structured LLM pass
      - convert user text + BrainResponse + current state into strict DB commands
      - split multi-item requests into multiple commands
-  -> Grocery Service / Repository
+  -> Shopping Service / Repository
      - validate and execute Firestore operations
   -> Reply
      - generate persona reply from actual DB results after persistence succeeds
      - use deterministic fallback if reply generation fails validation
 ```
 
-The core rule is: **the Brain routes; the Grocery Planner plans DB operations; the Repository persists.** Gemini-generated chat text must not be treated as the source of truth for Firestore writes.
+The core rule is: **the Brain routes; the Shopping Planner plans DB operations; the Repository persists.** Gemini-generated chat text must not be treated as the source of truth for Firestore writes.
 
 ### Project Structure
 
@@ -54,7 +54,7 @@ cinna/
 │   │   ├── brain.ts          # Gemini & Function Calling
 │   │   └── config.ts         # Env validation (Zod)
 │   ├── modules/
-│   │   ├── grocery/          # Grocery module logic
+│   │   ├── shopping/         # Shopping module logic
 │   │   │   ├── handler.ts
 │   │   │   ├── planner.ts
 │   │   │   ├── repository.ts
@@ -126,7 +126,7 @@ Triggered on merge to `main` or specific tags.
    - Pass this history to the Gemini API call.
 2. **Long-Term (User Data & Feedback):**
    - Implement "Agentic Memory" via Function Calling.
-   - _Storage:_ **Firestore** will be used to persist grocery lists, user preferences, and bot improvement feedback (bugs/suggestions).
+   - _Storage:_ **Firestore** will be used to persist shopping lists, user preferences, and bot improvement feedback (bugs/suggestions).
    - Cinna will have a dedicated tool to `record_bot_feedback(category, detail)` where `category` is 'bug' or 'improvement'.
 
 ---
@@ -163,34 +163,34 @@ Triggered on merge to `main` or specific tags.
   - Implement basic in-memory session tracking for short-term context.
   - _Verification:_ [x] Unit tests with various intents and mocked Gemini output pass.
 
-### Phase 3: Grocery MVP Persistence (Firestore)
+### Phase 3: Shopping MVP Persistence (Firestore)
 
-The goal of this phase is to finish the persistent grocery function end to end. Once grocery add/list/update/remove/clear works locally with Firestore and tests, the project should move directly to getting the bot online instead of waiting for audio, feedback, or broader language polish.
+The goal of this phase is to finish the persistent shopping-list function end to end. Once shopping add/list/update/remove/clear works locally with Firestore and tests, the project should move directly to getting the bot online instead of waiting for audio, feedback, or broader language polish.
 
 - **Step 3.1: Firebase Initialization**
   - Install `firebase-admin` and configure credentials.
   - Add a Firestore initialization module that can be mocked in tests.
   - _Verification:_ [x] `firebase-admin` initializes via explicit project/database config and repository tests use a mocked store.
-- **Step 3.2: Grocery Domain Model & Firestore Repository**
-  - Implement `src/modules/grocery/types.ts` with Zod schemas for grocery items, planner commands, and operation results.
-  - Implement a Firestore repository that stores active grocery items under user-scoped lists.
+- **Step 3.2: Shopping Domain Model & Firestore Repository**
+  - Implement `src/modules/shopping/types.ts` with Zod schemas for shopping items, planner commands, and operation results.
+  - Implement a Firestore repository that stores active shopping items under user-scoped category lists.
   - Recommended document shape:
     ```text
-    users/{telegramUserId}/groceryLists/{shopOrDefault}
+    users/{telegramUserId}/shoppingLists/{category}
     ```
-  - Store `shopName`, an `items` array, and `lastUpdated` as epoch milliseconds; each item should contain `name` and `addedAt` as epoch milliseconds.
+  - Store `category`, an `items` array, and `lastUpdated` as epoch milliseconds; each item should contain `name` and `addedAt` as epoch milliseconds.
   - _Verification:_ [x] Repository unit tests cover add, list, update, remove, and clear using a mocked Firestore adapter.
 - **Step 3.3.1: End-to-End `add_item` Slice**
   - Implement only enough planner, service, handler, dispatcher wiring, and reply formatting for `add_item`.
-  - The full path must be: Telegram text -> core Brain routes `GROCERY` -> grocery planner returns validated `add_item` -> service calls `repository.addItem` -> Firestore is updated -> bot replies from the repository result.
-  - Keep unsupported grocery actions explicitly unimplemented or safely rejected in this slice.
+  - The full path must be: Telegram text -> core Brain routes `SHOPPING` -> shopping planner returns validated `add_item` -> service calls `repository.addItem` -> Firestore is updated -> bot replies from the repository result.
+  - Keep unsupported shopping actions explicitly unimplemented or safely rejected in this slice.
   - _Verification:_ [ ] Unit tests cover `add_item` planner parsing, command execution, reply formatting, handler orchestration, and dispatcher routing.
-  - _Verification:_ [ ] Manual Telegram test adds one item to the configured development Firestore database and the bot replies with the persisted item/shop.
-- **Step 3.3.1a: Replace Free-Form Shop with List Category**
-  - `shopName` is not reliable enough as a primary grouping field. Replace or supplement it with a broader planner-controlled category before building more grocery slices.
+  - _Verification:_ [ ] Manual Telegram test adds one item to the configured development Firestore database and the bot replies with the persisted item/category.
+- **Step 3.3.1a: Replace Free-Form Store Text with List Category**
+  - Free-form store/place text is not reliable enough as a grouping or display field. Replace it with a broader planner-controlled category before building more shopping slices.
   - Suggested initial categories: `grocery`, `pharmacy`, `pet_store`, `toy_shop`, `other`.
-  - Keep optional free-form shop/place text only as display metadata when the user explicitly names a store.
-  - _Verification:_ [ ] Planner/schema/repository tests cover category normalization, unknown category fallback to `other`, and preservation of explicit shop text as metadata.
+  - Do not persist free-form shop/place text.
+  - _Verification:_ [x] Planner/schema/repository tests cover category normalization and unknown category fallback to `other`.
 - **Step 3.3.2: End-to-End `list_items` Slice**
   - Extend the planner, service, handler, dispatcher tests, and replies for `list_items`.
   - List replies must be built from Firestore results, not Gemini-generated prose.
@@ -211,7 +211,7 @@ The goal of this phase is to finish the persistent grocery function end to end. 
   - Clearing should reply from the repository result and make the final stored list empty.
   - _Verification:_ [ ] Unit tests cover clearing non-empty and already-empty lists.
   - _Verification:_ [ ] Manual Telegram test clears the development Firestore list and confirms a follow-up list is empty.
-- **Step 3.3.6: Full Grocery Smoke Test**
+- **Step 3.3.6: Full Shopping Smoke Test**
   - Add a manual smoke script or checklist that runs add, list, update, remove, and clear against configured `FIREBASE_PROJECT_ID` and `FIRESTORE_DATABASE_ID`.
   - _Verification:_ [ ] Smoke flow passes against the development Firestore database and leaves predictable test data.
 
@@ -229,10 +229,10 @@ The goal of this phase is to finish the persistent grocery function end to end. 
   - Setup `cd.yml` for automated deployment.
   - _Verification:_
     - [ ] Manual: Bot works in production via the Cloud Run URL.
-- **Step 4.4: Production Grocery Smoke Test**
-  - Verify the deployed bot can add, list, update, remove, and clear grocery items against the intended Firestore project.
+- **Step 4.4: Production Shopping Smoke Test**
+  - Verify the deployed bot can add, list, update, remove, and clear shopping items against the intended Firestore project.
   - _Verification:_
-    - [ ] Manual: Send grocery commands to the production Telegram bot and confirm Firestore state matches replies.
+    - [ ] Manual: Send shopping commands to the production Telegram bot and confirm Firestore state matches replies.
 
 ### Phase 5: Post-Launch Module Expansion
 

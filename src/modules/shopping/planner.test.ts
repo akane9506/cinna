@@ -2,25 +2,32 @@ import { describe, expect, it } from "bun:test";
 import { BrainResponse } from "../../core/types";
 import {
   assertAddItemCommands,
-  createGroceryPlanner,
-  createGroceryReplyGenerator,
-  formatGroceryReply,
+  createShoppingPlanner,
+  createShoppingReplyGenerator,
+  formatShoppingReply,
 } from "./planner";
 
-describe("createGroceryPlanner", () => {
+describe("createShoppingPlanner", () => {
   it("plans multiple add_item commands from structured LLM output", async () => {
     const response: BrainResponse = {
-      intent: "GROCERY",
+      intent: "SHOPPING",
       language: "en",
       reply: "Added milk.",
       action: "add",
-      shop: "Costco",
     };
-    const planner = createGroceryPlanner(async () => ({
+    const planner = createShoppingPlanner(async () => ({
       text: JSON.stringify({
         commands: [
-          { type: "add_item", itemName: "milk", shopName: "Costco" },
-          { type: "add_item", itemName: "eggs", shopName: "Costco" },
+          {
+            type: "add_item",
+            itemName: "milk",
+            category: "grocery",
+          },
+          {
+            type: "add_item",
+            itemName: "eggs",
+            category: "grocery",
+          },
         ],
       }),
     }));
@@ -32,26 +39,68 @@ describe("createGroceryPlanner", () => {
       }),
     ).resolves.toEqual({
       commands: [
-        { type: "add_item", itemName: "milk", shopName: "Costco" },
-        { type: "add_item", itemName: "eggs", shopName: "Costco" },
+        {
+          type: "add_item",
+          itemName: "milk",
+          category: "grocery",
+        },
+        {
+          type: "add_item",
+          itemName: "eggs",
+          category: "grocery",
+        },
+      ],
+    });
+  });
+
+  it("falls unknown categories back to other", async () => {
+    const planner = createShoppingPlanner(async () => ({
+      text: JSON.stringify({
+        commands: [
+          {
+            type: "add_item",
+            itemName: "screws",
+            category: "hardware",
+          },
+        ],
+      }),
+    }));
+
+    await expect(
+      planner({
+        userText: "add screws from Ace Hardware",
+        brainResponse: {
+          intent: "SHOPPING",
+          language: "en",
+          reply: "Added screws.",
+          action: "add",
+        },
+      }),
+    ).resolves.toEqual({
+      commands: [
+        {
+          type: "add_item",
+          itemName: "screws",
+          category: "other",
+        },
       ],
     });
   });
 
   it("rejects invalid planner output", async () => {
-    const planner = createGroceryPlanner(async () => ({ text: "{}" }));
+    const planner = createShoppingPlanner(async () => ({ text: "{}" }));
 
     await expect(
       planner({
         userText: "add milk",
         brainResponse: {
-          intent: "GROCERY",
+          intent: "SHOPPING",
           language: "en",
           reply: "Added milk.",
           action: "add",
         },
       }),
-    ).rejects.toThrow("Failed to plan grocery command from request");
+    ).rejects.toThrow("Failed to plan shopping command from request");
   });
 });
 
@@ -59,19 +108,29 @@ describe("assertAddItemCommands", () => {
   it("allows add_item commands", () => {
     expect(
       assertAddItemCommands([
-        { type: "add_item", itemName: "milk", shopName: "Costco" },
+        {
+          type: "add_item",
+          itemName: "milk",
+          category: "grocery",
+        },
       ]),
-    ).toEqual([{ type: "add_item", itemName: "milk", shopName: "Costco" }]);
+    ).toEqual([
+      {
+        type: "add_item",
+        itemName: "milk",
+        category: "grocery",
+      },
+    ]);
   });
 
-  it("rejects unsupported grocery actions for the first slice", () => {
+  it("rejects unsupported shopping actions for the first slice", () => {
     expect(() =>
-      assertAddItemCommands([{ type: "list_items", shopName: "Costco" }]),
-    ).toThrow("Only grocery add_item is supported right now.");
+      assertAddItemCommands([{ type: "list_items", category: "grocery" }]),
+    ).toThrow("Only shopping add_item is supported right now.");
   });
 
   it("rejects empty command lists before execution", async () => {
-    const planner = createGroceryPlanner(async () => ({
+    const planner = createShoppingPlanner(async () => ({
       text: JSON.stringify({ commands: [] }),
     }));
 
@@ -79,31 +138,31 @@ describe("assertAddItemCommands", () => {
       planner({
         userText: "add milk",
         brainResponse: {
-          intent: "GROCERY",
+          intent: "SHOPPING",
           language: "en",
           reply: "Added milk.",
           action: "add",
         },
       }),
-    ).rejects.toThrow("Failed to plan grocery command from request");
+    ).rejects.toThrow("Failed to plan shopping command from request");
   });
 });
 
-describe("formatGroceryReply", () => {
+describe("formatShoppingReply", () => {
   it("formats add_item replies from repository results after persistence", () => {
     expect(
-      formatGroceryReply(
+      formatShoppingReply(
         [
           {
             type: "add_item",
-            shopName: "Costco",
+            category: "grocery",
             items: [{ name: "milk", addedAt: 1 }],
             changed: true,
             itemName: "milk",
           },
           {
             type: "add_item",
-            shopName: "Costco",
+            category: "grocery",
             items: [{ name: "milk", addedAt: 1 }],
             changed: true,
             itemName: "eggs",
@@ -111,16 +170,16 @@ describe("formatGroceryReply", () => {
         ],
         "en",
       ),
-    ).toBe("Done～ I added milk, eggs to your Costco grocery list. (u･ω･u)");
+    ).toBe("Done～ I added milk, eggs to your grocery shopping list. (u･ω･u)");
   });
 
-  it("formats Chinese add_item replies", () => {
+  it("formats Chinese add_item replies with category when shop is absent", () => {
     expect(
-      formatGroceryReply(
+      formatShoppingReply(
         [
           {
             type: "add_item",
-            shopName: "Costco",
+            category: "grocery",
             items: [{ name: "两箱全脂牛奶(milk)", addedAt: 1 }],
             changed: true,
             itemName: "两箱全脂牛奶(milk)",
@@ -128,13 +187,13 @@ describe("formatGroceryReply", () => {
         ],
         "zh",
       ),
-    ).toBe("好哒～已经把 两箱全脂牛奶(milk) 加到 Costco 的购物清单啦 (u･ω･u)");
+    ).toBe("好哒～已经把 两箱全脂牛奶(milk) 加到 grocery 的购物清单啦 (u･ω･u)");
   });
 });
 
-describe("createGroceryReplyGenerator", () => {
+describe("createShoppingReplyGenerator", () => {
   it("generates a final persona reply from persisted results", async () => {
-    const replyGenerator = createGroceryReplyGenerator(async () => ({
+    const replyGenerator = createShoppingReplyGenerator(async () => ({
       text: JSON.stringify({
         reply: "好哒～牛奶和鸡蛋都存好啦 (u･ω･u)",
       }),
@@ -147,7 +206,7 @@ describe("createGroceryReplyGenerator", () => {
         results: [
           {
             type: "add_item",
-            shopName: "Costco",
+            category: "grocery",
             items: [{ name: "milk", addedAt: 1 }],
             changed: true,
             itemName: "milk",
@@ -158,7 +217,7 @@ describe("createGroceryReplyGenerator", () => {
   });
 
   it("falls back to deterministic formatting when final reply output is invalid", async () => {
-    const replyGenerator = createGroceryReplyGenerator(async () => ({
+    const replyGenerator = createShoppingReplyGenerator(async () => ({
       text: "{}",
     }));
 
@@ -169,13 +228,15 @@ describe("createGroceryReplyGenerator", () => {
         results: [
           {
             type: "add_item",
-            shopName: "Costco",
+            category: "grocery",
             items: [{ name: "milk", addedAt: 1 }],
             changed: true,
             itemName: "milk",
           },
         ],
       }),
-    ).resolves.toBe("Done～ I added milk to your Costco grocery list. (u･ω･u)");
+    ).resolves.toBe(
+      "Done～ I added milk to your grocery shopping list. (u･ω･u)",
+    );
   });
 });

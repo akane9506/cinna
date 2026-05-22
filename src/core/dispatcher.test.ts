@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
 
-const mockHandleGroceryIntent = mock(async () => {});
+const mockHandleShoppingIntent = mock(async () => {});
 const mockLoggerInfo = mock();
 const mockLoggerError = mock();
 
-mock.module("../modules/grocery/handler", () => ({
-  handleGroceryIntent: mockHandleGroceryIntent,
+mock.module("../modules/shopping/handler", () => ({
+  handleShoppingIntent: mockHandleShoppingIntent,
 }));
 
 mock.module("./logger", () => ({
@@ -19,25 +19,24 @@ const { dispatchIntent } = await import("./dispatcher");
 
 describe("dispatchIntent", () => {
   beforeEach(() => {
-    mockHandleGroceryIntent.mockClear();
+    mockHandleShoppingIntent.mockClear();
     mockLoggerInfo.mockClear();
     mockLoggerError.mockClear();
   });
 
-  it("routes grocery responses to the grocery handler", async () => {
+  it("routes shopping responses to the shopping handler", async () => {
     const ctx = { reply: mock(async () => {}) } as any;
     const response = {
-      intent: "GROCERY",
+      intent: "SHOPPING",
       language: "en",
       reply: "AI reply should not be used.",
       action: "add",
       item: "milk",
-      shop: "Costco",
     } as const;
 
     await dispatchIntent(ctx, response, "add milk at Costco");
 
-    expect(mockHandleGroceryIntent).toHaveBeenCalledWith(
+    expect(mockHandleShoppingIntent).toHaveBeenCalledWith(
       ctx,
       response,
       "add milk at Costco",
@@ -56,6 +55,6 @@ describe("dispatchIntent", () => {
     await dispatchIntent({ reply } as any, response);
 
     expect(reply).toHaveBeenCalledWith("Hello.");
-    expect(mockHandleGroceryIntent).not.toHaveBeenCalled();
+    expect(mockHandleShoppingIntent).not.toHaveBeenCalled();
   });
 });
