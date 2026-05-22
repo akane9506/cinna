@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const BrainGroceryActionSchema = z.enum([
+export const BrainShoppingActionSchema = z.enum([
   "add",
   "remove",
   "clear",
@@ -9,16 +9,15 @@ export const BrainGroceryActionSchema = z.enum([
 ]);
 
 export const BrainResponseSchema = z.object({
-  intent: z.enum(["GROCERY", "FEEDBACK", "OTHER"]),
+  intent: z.enum(["SHOPPING", "FEEDBACK", "OTHER"]),
   language: z.string().describe("ISO 639-1 code"),
   reply: z.string().describe("Cute persona reply"),
   // Flattened params
   item: z
     .string()
     .optional()
-    .describe("GROCERY: Item name in 'Original(English)' format"),
-  action: BrainGroceryActionSchema.optional().describe("GROCERY: The action"),
-  shop: z.string().optional().describe("GROCERY: Shop name"),
+    .describe("SHOPPING: Item name in 'Original(English)' format"),
+  action: BrainShoppingActionSchema.optional().describe("SHOPPING: The action"),
   detail: z.string().optional().describe("FEEDBACK: Content"),
   category: z
     .enum(["bug", "suggestion"])
@@ -27,11 +26,10 @@ export const BrainResponseSchema = z.object({
 });
 
 export type BrainResponse = z.infer<typeof BrainResponseSchema>;
-export type BrainGroceryAction = z.infer<typeof BrainGroceryActionSchema>;
+export type BrainShoppingAction = z.infer<typeof BrainShoppingActionSchema>;
 // Re-export types for backward compatibility in tests
-export type GroceryParams = {
+export type ShoppingParams = {
   item: string;
-  action: BrainGroceryAction;
-  shop?: string;
+  action: BrainShoppingAction;
 };
 export type FeedbackParams = { detail: string; category: string };

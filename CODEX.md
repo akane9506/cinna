@@ -18,9 +18,9 @@ The current implementation supports:
 - Short-term in-memory chat history with bounded sessions.
 - Firebase Admin initialization for Firestore with explicit project/database
   configuration and startup logging.
-- Grocery schemas and a tested Firestore repository foundation for add, list,
+- Shopping schemas and a tested Firestore repository foundation for add, list,
   update, remove, and clear operations.
-- Grocery `add_item` flow uses Brain routing, a second structured grocery
+- Shopping `add_item` flow uses Brain routing, a second structured shopping
   planner call, Firestore writes, then a persona reply generated from persisted
   results.
 - Placeholder voice message handling.
@@ -34,21 +34,21 @@ The current implementation supports:
 - `src/core/middleware.ts`: Telegram user whitelist middleware.
 - `src/core/brain.ts`: Gemini client, persona loading, structured response
   generation, schema validation, and chat history.
-- `src/core/dispatcher.ts`: Intent dispatch boundary. Routes grocery intents to
-  the grocery module with the original user text, while general chat still uses
+- `src/core/dispatcher.ts`: Intent dispatch boundary. Routes shopping intents to
+  the shopping module with the original user text, while general chat still uses
   the Brain reply.
 - `src/core/firestore.ts`: Firebase Admin initialization and Firestore database
   selection. Logs project ID, database ID, credential mode, and whether an
   existing Firebase app was reused.
 - `src/core/types.ts`: Zod schema and TypeScript types for brain responses.
 - `src/core/persona.md`: Local persona/system prompt source.
-- `src/modules/grocery/types.ts`: Grocery list, item, planner command, and
+- `src/modules/shopping/types.ts`: Shopping list, item, planner command, and
   operation result schemas.
-- `src/modules/grocery/planner.ts`: Grocery-specific structured LLM planner and
+- `src/modules/shopping/planner.ts`: Shopping-specific structured LLM planner and
   post-persistence persona reply generator.
-- `src/modules/grocery/handler.ts`: Grocery orchestration from planner commands
+- `src/modules/shopping/handler.ts`: Shopping orchestration from planner commands
   through repository writes and final reply.
-- `src/modules/grocery/repository.ts`: Firestore-backed grocery repository with
+- `src/modules/shopping/repository.ts`: Firestore-backed shopping repository with
   injected store support for tests.
 
 Future feature modules should live under `src/modules/{feature_name}`.
@@ -106,88 +106,84 @@ These are current improvement candidates, not blockers for every change:
 ## Roadmap Alignment
 
 Follow the roadmap and status checklist in `CINNA_PLAN.md`. The next major
-unfinished work is Phase 3, implemented as vertical end-to-end grocery action
+unfinished work is Phase 3, implemented as vertical end-to-end shopping action
 slices:
 
 - First: `add_item` from Telegram text through planner, service, repository,
   Firestore write, and user reply.
 - Then: `list_items`, `remove_item`, `update_item`, and `clear_list` as separate
   verified slices.
-- Finish with a full grocery smoke flow against the configured development
+- Finish with a full shopping-list smoke flow against the configured development
   Firestore database.
 
-After the grocery MVP works locally, Phase 4 is the online launch track:
+After the shopping-list MVP works locally, Phase 4 is the online launch track:
 
 - Hono webhook server.
 - Docker/Cloud Run packaging.
 - Production deployment workflow.
-- Production grocery smoke test.
+- Production shopping-list smoke test.
 
 Audio, feedback, and broader multi-language polish are Phase 5 post-launch work.
 
-## Grocery LLM Pattern
+## Shopping LLM Pattern
 
-Do not write grocery data directly from the core Brain response. The expected
+Do not write shopping-list data directly from the core Brain response. The expected
 flow is:
 
 ```text
-user text -> Brain intent reply -> grocery planner structured commands
+user text -> Brain intent reply -> shopping planner structured commands
 -> repository writes -> persona reply from persisted results
 ```
 
 This lets one user message produce multiple storage operations, such as adding
-several grocery items at once, while keeping replies grounded in saved data.
+several shopping items at once, while keeping replies grounded in saved data.
 
 ## Planned Firestore Shape
 
-Start with the simplest useful grocery model: one grocery list document per
-shop, scoped under the Telegram user. If the user does not provide a shop, use
-`default`.
+Start with the simplest useful shopping-list model: one list document per
+planner-controlled category, scoped under the Telegram user. If the planner does
+not provide a category, use `grocery`; if it provides an unknown category, fall
+back to `other`.
 
 ```text
-users/{userId}/groceryLists/{shopName}
+users/{userId}/shoppingLists/{category}
 ```
 
-Use a normalized shop name as the document id:
+Use one of the controlled category ids as the document id:
 
-- No shop provided: `default`
-- `Costco`: `costco`
-- `Trader Joe's`: `trader-joes`
+- No category provided: `grocery`
+- Supported categories: `grocery`, `pharmacy`, `pet_store`, `toy_shop`, `other`
+- Unknown category: `other`
 
 Keep the document shape compact:
 
 ```ts
-export interface GroceryListItem {
+export interface ShoppingListItem {
   name: string; // "两箱全脂牛奶(milk)"
   addedAt: number; // epoch milliseconds
 }
 
-export interface GroceryListDoc {
-  shopName: string; // display name, e.g. "Costco" or "default"
-  items: GroceryListItem[];
+export interface ShoppingListDoc {
+  category: "grocery" | "pharmacy" | "pet_store" | "toy_shop" | "other";
+  items: ShoppingListItem[];
   lastUpdated: number; // epoch milliseconds
 }
 ```
 
-Normalize document ids before writing:
+Normalize category ids before writing:
 
 ```ts
-function normalizeShopId(shopName?: string): string {
-  if (!shopName?.trim()) return "default";
-
-  return shopName
-    .trim()
-    .toLowerCase()
-    .replaceAll("/", "-")
-    .replace(/\s+/g, "-");
+function normalizeShoppingCategory(category?: string): ShoppingCategory {
+  if (!category?.trim()) return "grocery";
+  return ShoppingCategorySchema.parse(category); // invalid values fall back to "other"
 }
 ```
 
 ## Functional Requirements
 
-- Grocery list retrieval: when the user asks to view a grocery list, Cinna
+- Shopping list retrieval: when the user asks to view a shopping list, Cinna
   should first reply with the requested list contents.
-- Grocery retention prompt: after replying with a requested grocery list, Cinna
+- Shopping retention prompt: after replying with a requested shopping list, Cinna
   should check whether the list or any items are older than one month. If stale
   data exists, send a separate follow-up message asking whether the user wants
   to delete it. Do not delete stale data automatically.

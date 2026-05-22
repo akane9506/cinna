@@ -38,7 +38,6 @@ mock.module("./persona", () => ({
   getPersona: mock(async () => "test persona"),
 }));
 
-import { GroceryParams } from "./types";
 // Use dynamic import to ensure mocks are applied
 const { generateCompletion } = await import("./brain");
 
@@ -55,31 +54,29 @@ describe("brain.ts", () => {
   });
 
   it("should correctly parse structured intent routing", async () => {
-    const groceryJson = JSON.stringify({
-      intent: "GROCERY",
+    const shoppingJson = JSON.stringify({
+      intent: "SHOPPING",
       language: "zh",
-      reply: "好哒～已经帮你在 Costco 的清单里加上两箱全脂牛奶啦！(u･ω･u)",
+      reply: "好哒～已经帮你在购物清单里加上两箱全脂牛奶啦！(u･ω･u)",
       item: "两箱全脂牛奶(milk)",
       action: "add",
-      shop: "Costco",
     });
     mockGenerateContent.mockImplementationOnce(async () => ({
-      text: groceryJson,
+      text: shoppingJson,
     }));
 
     const response = await generateCompletion(
       "买两箱全脂牛奶 at Costco",
-      "chat-grocery",
+      "chat-shopping",
     );
-    expect(response.intent).toBe("GROCERY");
+    expect(response.intent).toBe("SHOPPING");
     expect(response.item).toBe("两箱全脂牛奶(milk)");
-    expect(response.shop).toBe("Costco");
     expect(response.action).toBe("add");
   });
 
-  it("should correctly parse grocery 'modify' action", async () => {
+  it("should correctly parse shopping 'modify' action", async () => {
     const modifyJson = JSON.stringify({
-      intent: "GROCERY",
+      intent: "SHOPPING",
       language: "zh",
       reply: "好哒～已经帮你把牛奶改成了两箱全脂牛奶啦！(u･ω･u)",
       item: "两箱全脂牛奶(milk)",
@@ -93,7 +90,7 @@ describe("brain.ts", () => {
       "把牛奶改成两箱全脂牛奶",
       "chat-modify",
     );
-    expect(response.intent).toBe("GROCERY");
+    expect(response.intent).toBe("SHOPPING");
     expect(response.item).toBe("两箱全脂牛奶(milk)");
     expect(response.action).toBe("modify");
   });
