@@ -136,4 +136,46 @@ describe("createShoppingHandler", () => {
       "That shopping action is not supported yet.",
     );
   });
+
+  it("replies with a save error when persistence fails", async () => {
+    const addItems = mock(async () => {
+      throw new Error("database unavailable");
+    });
+    const planner = mock(async () => ({
+      commands: [
+        {
+          type: "add_item" as const,
+          itemName: "milk",
+          category: "grocery" as const,
+        },
+      ],
+    }));
+    const replyGenerator = mock(async () => "should not be called");
+    const reply = mock(async () => {});
+    const handler = createShoppingHandler(
+      { addItems } as any,
+      planner,
+      replyGenerator,
+    );
+
+    await handler(
+      {
+        from: { id: 123 },
+        reply,
+      } as any,
+      {
+        intent: "SHOPPING",
+        language: "en",
+        reply: "AI reply should not be used.",
+        action: "add",
+      },
+      "add milk",
+    );
+
+    expect(addItems).toHaveBeenCalledWith("123", ["milk"], "grocery");
+    expect(replyGenerator).not.toHaveBeenCalled();
+    expect(reply).toHaveBeenCalledWith(
+      "Sorry, I encountered an error while saving your shopping list.",
+    );
+  });
 });

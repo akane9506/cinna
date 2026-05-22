@@ -56,13 +56,25 @@ export const createShoppingHandler = (
       itemNamesByCategory.set(category, itemNames);
     }
 
-    const results = (
-      await Promise.all(
-        [...itemNamesByCategory.entries()].map(([category, itemNames]) =>
-          repository.addItems(userId, itemNames, category),
-        ),
-      )
-    ).flat();
+    let results;
+    try {
+      results = (
+        await Promise.all(
+          [...itemNamesByCategory.entries()].map(([category, itemNames]) =>
+            repository.addItems(userId, itemNames, category),
+          ),
+        )
+      ).flat();
+    } catch (error) {
+      logger.error({ error, userId }, "Failed to persist shopping items");
+      await ctx.reply(
+        brainResponse.language === "zh"
+          ? "保存购物清单时出错了，请稍后再试。"
+          : "Sorry, I encountered an error while saving your shopping list.",
+      );
+      return;
+    }
+
     await ctx.reply(
       await replyGenerator({
         userText,
