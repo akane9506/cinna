@@ -73,7 +73,7 @@ const loadPrompt = async (
 export const getShoppingPlannerInstruction = (): Promise<string> =>
   loadPrompt(
     "planner.instruction.md",
-    "Convert the user's shopping request into strict JSON commands. Split multiple shopping items into separate add_item commands. Use category as the only list grouping key.",
+    "Convert the user's shopping request into strict JSON commands. Group shopping items by category into add_items commands. Use category as the only list grouping key.",
   );
 
 const getShoppingReplyInstruction = (): Promise<string> =>
@@ -145,7 +145,7 @@ const buildReplyPrompt = ({
     persistedResults: results.map((result) => ({
       type: result.type,
       category: result.category,
-      itemName: result.itemName,
+      itemNames: "itemNames" in result ? result.itemNames : undefined,
       changed: result.changed,
     })),
   });
@@ -187,16 +187,16 @@ export const createShoppingReplyGenerator = (
 
 export const generateShoppingReply = createShoppingReplyGenerator();
 
-export const assertAddItemCommands = (
+export const assertAddItemsCommands = (
   commands: ShoppingPlannerCommand[],
-): Extract<ShoppingPlannerCommand, { type: "add_item" }>[] => {
+): Extract<ShoppingPlannerCommand, { type: "add_items" }>[] => {
   const unsupportedCommand = commands.find(
-    (command) => command.type !== "add_item",
+    (command) => command.type !== "add_items",
   );
   if (unsupportedCommand) {
-    throw new Error("Only shopping add_item is supported right now.");
+    throw new Error("Only shopping add_items is supported right now.");
   }
-  return commands as Extract<ShoppingPlannerCommand, { type: "add_item" }>[];
+  return commands as Extract<ShoppingPlannerCommand, { type: "add_items" }>[];
 };
 
 export const formatShoppingReply = (
@@ -204,7 +204,7 @@ export const formatShoppingReply = (
   language: string,
 ): string => {
   const unsupportedResult = results.find(
-    (result) => result.type !== "add_item",
+    (result) => result.type !== "add_items",
   );
   if (unsupportedResult) {
     return language === "zh"
@@ -212,9 +212,9 @@ export const formatShoppingReply = (
       : "That shopping action is not supported yet.";
   }
 
-  const itemNames = results
-    .map((result) => result.itemName)
-    .filter((itemName): itemName is string => Boolean(itemName));
+  const itemNames = results.flatMap((result) =>
+    "itemNames" in result ? result.itemNames : [],
+  );
   const firstResult = results[0];
   const listName = firstResult?.category ?? "grocery";
 

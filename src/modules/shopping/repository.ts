@@ -47,6 +47,32 @@ export const createFirestoreShoppingListStore = (
   },
 });
 
+type ShoppingItemUpdate = {
+  existingItemName: string;
+  newItemName: string;
+};
+
+type ShoppingAddItemsResult = Extract<
+  ShoppingOperationResult,
+  { type: "add_items" }
+>;
+type ShoppingListItemsResult = Extract<
+  ShoppingOperationResult,
+  { type: "list_items" }
+>;
+type ShoppingUpdateItemsResult = Extract<
+  ShoppingOperationResult,
+  { type: "update_items" }
+>;
+type ShoppingRemoveItemsResult = Extract<
+  ShoppingOperationResult,
+  { type: "remove_items" }
+>;
+type ShoppingClearListResult = Extract<
+  ShoppingOperationResult,
+  { type: "clear_list" }
+>;
+
 export class ShoppingRepository {
   constructor(
     private readonly store: ShoppingListStore = createFirestoreShoppingListStore(),
@@ -54,24 +80,28 @@ export class ShoppingRepository {
 
   // The current strategy is that, with any updates, we overwrite the whole list,
   // rather than update part of the document.
-  async addItem(
-    userId: string,
-    itemName: string,
-    category?: string,
-  ): Promise<ShoppingOperationResult> {
-    const results = await this.addItems(userId, [itemName], category);
-    return results[0];
-  }
-
   async addItems(
     userId: string,
     itemNames: string[],
     category?: string,
-  ): Promise<ShoppingOperationResult[]> {
+  ): Promise<ShoppingAddItemsResult> {
     const list = await this.loadOrCreateList(userId, category);
+    const normalizedItemNames = itemNames
+      .map((itemName) => itemName.trim())
+      .filter(Boolean);
+
+    if (normalizedItemNames.length === 0) {
+      return {
+        type: "add_items",
+        category: list.category,
+        changed: false,
+        itemNames: [],
+      };
+    }
+
     const now = Date.now();
-    const itemsToAdd = itemNames.map((itemName) => ({
-      name: itemName.trim(),
+    const itemsToAdd = normalizedItemNames.map((itemName) => ({
+      name: itemName,
       addedAt: now,
     }));
     const updatedList = {
@@ -80,20 +110,19 @@ export class ShoppingRepository {
       lastUpdated: now,
     };
     await this.saveList(userId, updatedList.category, updatedList);
-    return itemsToAdd.map((item) => ({
-      type: "add_item",
+    return {
+      type: "add_items",
       category: updatedList.category,
-      items: updatedList.items,
       changed: true,
-      itemName: item.name,
-    }));
+      itemNames: itemsToAdd.map((item) => item.name),
+    };
   }
 
   // Get the shopping list by controlled category. Unknown categories fall back to "other".
   async listItems(
     userId: string,
     category?: string,
-  ): Promise<ShoppingOperationResult> {
+  ): Promise<ShoppingListItemsResult> {
     const list = await this.loadOrCreateList(userId, category);
     return {
       type: "list_items",
@@ -103,33 +132,63 @@ export class ShoppingRepository {
     };
   }
 
-  // update item name. the name can also include quantity or other related information.
-  // this is by design to make the name include as much information as possible
-  async updateItem(
+  async updateItems(
     userId: string,
-    existingItemName: string,
-    newItemName: string,
+    itemUpdates: ShoppingItemUpdate[],
     category?: string,
-  ): Promise<ShoppingOperationResult> {
+  ): Promise<ShoppingUpdateItemsResult> {
     const list = await this.loadOrCreateList(userId, category);
-    const index = this.findItemIndex(list.items, existingItemName);
-    if (index === -1) {
+    const normalizedUpdates = itemUpdates
+      .map((itemUpdate) => ({
+        existingItemName: itemUpdate.existingItemName.trim(),
+        newItemName: itemUpdate.newItemName.trim(),
+      }))
+      .filter(
+        (itemUpdate) =>
+          itemUpdate.existingItemName.length > 0 &&
+          itemUpdate.newItemName.length > 0,
+      );
+
+    if (normalizedUpdates.length === 0) {
       return {
-        type: "update_item",
+        type: "update_items",
         category: list.category,
-        items: list.items,
         changed: false,
-        itemName: newItemName.trim(),
-        previousItemName: existingItemName.trim(),
+        itemNames: [],
+        previousItemNames: [],
       };
     }
-    // we only update the name but not change it's added date
+
     const now = Date.now();
     const updatedItems = [...list.items];
-    updatedItems[index] = {
-      ...updatedItems[index],
-      name: newItemName.trim(),
-    };
+    const changedUpdates: ShoppingItemUpdate[] = [];
+
+    for (const itemUpdate of normalizedUpdates) {
+      for (const [index, item] of updatedItems.entries()) {
+        if (!this.itemNameMatches(item, itemUpdate.existingItemName)) continue;
+
+        updatedItems[index] = {
+          ...item,
+          name: itemUpdate.newItemName,
+        };
+        changedUpdates.push(itemUpdate);
+      }
+    }
+
+    if (changedUpdates.length === 0) {
+      return {
+        type: "update_items",
+        category: list.category,
+        changed: false,
+        itemNames: normalizedUpdates.map(
+          (itemUpdate) => itemUpdate.newItemName,
+        ),
+        previousItemNames: normalizedUpdates.map(
+          (itemUpdate) => itemUpdate.existingItemName,
+        ),
+      };
+    }
+
     const updatedList = {
       ...list,
       items: updatedItems,
@@ -137,35 +196,55 @@ export class ShoppingRepository {
     };
     await this.saveList(userId, updatedList.category, updatedList);
     return {
-      type: "update_item",
+      type: "update_items",
       category: updatedList.category,
-      items: updatedList.items,
       changed: true,
-      itemName: newItemName.trim(),
-      previousItemName: existingItemName.trim(),
+      itemNames: changedUpdates.map((itemUpdate) => itemUpdate.newItemName),
+      previousItemNames: changedUpdates.map(
+        (itemUpdate) => itemUpdate.existingItemName,
+      ),
     };
   }
 
-  async removeItem(
+  async removeItems(
     userId: string,
-    itemName: string,
+    itemNames: string[],
     category?: string,
-  ): Promise<ShoppingOperationResult> {
+  ): Promise<ShoppingRemoveItemsResult> {
     const list = await this.loadOrCreateList(userId, category);
-    const index = this.findItemIndex(list.items, itemName);
-    if (index === -1) {
+    const normalizedItemNames = itemNames
+      .map((itemName) => itemName.trim())
+      .filter(Boolean);
+
+    if (normalizedItemNames.length === 0) {
       return {
-        type: "remove_item",
+        type: "remove_items",
         category: list.category,
-        items: list.items,
         changed: false,
-        itemName: itemName.trim(),
+        itemNames: [],
       };
     }
-    const now = Date.now();
-    const updatedItems = list.items.filter(
-      (_, itemIndex) => itemIndex !== index,
+
+    const requestedNames = new Set(
+      normalizedItemNames.map((itemName) => itemName.toLowerCase()),
     );
+    const removedItems: ShoppingItem[] = [];
+    const updatedItems = list.items.filter((item) => {
+      if (!requestedNames.has(item.name.trim().toLowerCase())) return true;
+      removedItems.push(item);
+      return false;
+    });
+
+    if (removedItems.length === 0) {
+      return {
+        type: "remove_items",
+        category: list.category,
+        changed: false,
+        itemNames: normalizedItemNames,
+      };
+    }
+
+    const now = Date.now();
     const updatedList = {
       ...list,
       items: updatedItems,
@@ -173,18 +252,17 @@ export class ShoppingRepository {
     };
     await this.saveList(userId, updatedList.category, updatedList);
     return {
-      type: "remove_item",
+      type: "remove_items",
       category: updatedList.category,
-      items: updatedList.items,
       changed: true,
-      itemName: itemName.trim(),
+      itemNames: removedItems.map((item) => item.name),
     };
   }
 
   async clearList(
     userId: string,
     category?: string,
-  ): Promise<ShoppingOperationResult> {
+  ): Promise<ShoppingClearListResult> {
     const list = await this.loadOrCreateList(userId, category);
     const now = Date.now();
     const updatedList = {
@@ -196,7 +274,6 @@ export class ShoppingRepository {
     return {
       type: "clear_list",
       category: updatedList.category,
-      items: updatedList.items,
       changed: list.items.length > 0,
     };
   }
@@ -224,10 +301,8 @@ export class ShoppingRepository {
     await this.store.saveList(userId, category, list);
   }
 
-  private findItemIndex(items: ShoppingItem[], itemName: string): number {
+  private itemNameMatches(item: ShoppingItem, itemName: string): boolean {
     const normalizedName = itemName.trim().toLowerCase();
-    return items.findIndex(
-      (item) => item.name.trim().toLowerCase() === normalizedName,
-    );
+    return item.name.trim().toLowerCase() === normalizedName;
   }
 }
