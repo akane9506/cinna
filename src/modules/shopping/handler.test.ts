@@ -4,7 +4,7 @@ import { createShoppingHandler } from "./handler";
 describe("createShoppingHandler", () => {
   it("plans and adds multiple items before replying with persisted details", async () => {
     const addItems = mock(async () => ({
-      type: "add_item" as const,
+      type: "add_items" as const,
       category: "grocery" as const,
       changed: true,
       itemNames: ["milk", "eggs"],
@@ -12,13 +12,8 @@ describe("createShoppingHandler", () => {
     const planner = mock(async () => ({
       commands: [
         {
-          type: "add_item" as const,
-          itemName: "milk",
-          category: "grocery" as const,
-        },
-        {
-          type: "add_item" as const,
-          itemName: "eggs",
+          type: "add_items" as const,
+          itemNames: ["milk", "eggs"],
           category: "grocery" as const,
         },
       ],
@@ -61,7 +56,7 @@ describe("createShoppingHandler", () => {
       language: "en",
       results: [
         {
-          type: "add_item",
+          type: "add_items",
           category: "grocery",
           changed: true,
           itemNames: ["milk", "eggs"],
@@ -114,8 +109,8 @@ describe("createShoppingHandler", () => {
     const planner = mock(async () => ({
       commands: [
         {
-          type: "add_item" as const,
-          itemName: "milk",
+          type: "add_items" as const,
+          itemNames: ["milk"],
           category: "grocery" as const,
         },
       ],

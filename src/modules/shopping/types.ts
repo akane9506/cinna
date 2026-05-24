@@ -8,7 +8,7 @@ export const ShoppingItemSchema = z.object({
 });
 
 export const ShoppingCategorySchema = z
-  .enum(["grocery", "pharmacy", "pet_store", "toy_shop", "other"])
+  .enum(["grocery", "pharmacy", "pet_store", "toy_shop", "stationery", "other"])
   .catch("other");
 
 export const ShoppingListDocSchema = z.object({
@@ -19,19 +19,25 @@ export const ShoppingListDocSchema = z.object({
 
 export const ShoppingPlannerCommandSchema = z.discriminatedUnion("type", [
   z.object({
-    type: z.literal("add_item"),
-    itemName: z.string().trim().min(1),
+    type: z.literal("add_items"),
+    itemNames: z.array(z.string().trim().min(1)).min(1),
     category: ShoppingCategorySchema.optional(),
   }),
   z.object({
-    type: z.literal("remove_item"),
-    itemName: z.string().trim().min(1),
+    type: z.literal("remove_items"),
+    itemNames: z.array(z.string().trim().min(1)).min(1),
     category: ShoppingCategorySchema.optional(),
   }),
   z.object({
-    type: z.literal("update_item"),
-    existingItemName: z.string().trim().min(1),
-    newItemName: z.string().trim().min(1),
+    type: z.literal("update_items"),
+    itemUpdates: z
+      .array(
+        z.object({
+          existingItemName: z.string().trim().min(1),
+          newItemName: z.string().trim().min(1),
+        }),
+      )
+      .min(1),
     category: ShoppingCategorySchema.optional(),
   }),
   z.object({
@@ -51,15 +57,15 @@ const ShoppingOperationResultBaseSchema = z.object({
 
 export const ShoppingOperationResultSchema = z.discriminatedUnion("type", [
   ShoppingOperationResultBaseSchema.extend({
-    type: z.literal("add_item"),
+    type: z.literal("add_items"),
     itemNames: z.array(z.string()),
   }),
   ShoppingOperationResultBaseSchema.extend({
-    type: z.literal("remove_item"),
+    type: z.literal("remove_items"),
     itemNames: z.array(z.string()),
   }),
   ShoppingOperationResultBaseSchema.extend({
-    type: z.literal("update_item"),
+    type: z.literal("update_items"),
     itemNames: z.array(z.string()),
     previousItemNames: z.array(z.string()),
   }),

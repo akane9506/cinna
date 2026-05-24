@@ -54,7 +54,7 @@ type ShoppingItemUpdate = {
 
 type ShoppingAddItemsResult = Extract<
   ShoppingOperationResult,
-  { type: "add_item" }
+  { type: "add_items" }
 >;
 type ShoppingListItemsResult = Extract<
   ShoppingOperationResult,
@@ -62,11 +62,11 @@ type ShoppingListItemsResult = Extract<
 >;
 type ShoppingUpdateItemsResult = Extract<
   ShoppingOperationResult,
-  { type: "update_item" }
+  { type: "update_items" }
 >;
 type ShoppingRemoveItemsResult = Extract<
   ShoppingOperationResult,
-  { type: "remove_item" }
+  { type: "remove_items" }
 >;
 type ShoppingClearListResult = Extract<
   ShoppingOperationResult,
@@ -92,7 +92,7 @@ export class ShoppingRepository {
 
     if (normalizedItemNames.length === 0) {
       return {
-        type: "add_item",
+        type: "add_items",
         category: list.category,
         changed: false,
         itemNames: [],
@@ -111,7 +111,7 @@ export class ShoppingRepository {
     };
     await this.saveList(userId, updatedList.category, updatedList);
     return {
-      type: "add_item",
+      type: "add_items",
       category: updatedList.category,
       changed: true,
       itemNames: itemsToAdd.map((item) => item.name),
@@ -151,7 +151,7 @@ export class ShoppingRepository {
 
     if (normalizedUpdates.length === 0) {
       return {
-        type: "update_item",
+        type: "update_items",
         category: list.category,
         changed: false,
         itemNames: [],
@@ -159,26 +159,25 @@ export class ShoppingRepository {
       };
     }
 
+    const now = Date.now();
     const updatedItems = [...list.items];
     const changedUpdates: ShoppingItemUpdate[] = [];
 
     for (const itemUpdate of normalizedUpdates) {
-      const index = this.findItemIndex(
-        updatedItems,
-        itemUpdate.existingItemName,
-      );
-      if (index === -1) continue;
+      for (const [index, item] of updatedItems.entries()) {
+        if (!this.itemNameMatches(item, itemUpdate.existingItemName)) continue;
 
-      updatedItems[index] = {
-        name: itemUpdate.newItemName,
-        addedAt: Date.now(),
-      };
-      changedUpdates.push(itemUpdate);
+        updatedItems[index] = {
+          ...item,
+          name: itemUpdate.newItemName,
+        };
+        changedUpdates.push(itemUpdate);
+      }
     }
 
     if (changedUpdates.length === 0) {
       return {
-        type: "update_item",
+        type: "update_items",
         category: list.category,
         changed: false,
         itemNames: normalizedUpdates.map(
@@ -193,11 +192,11 @@ export class ShoppingRepository {
     const updatedList = {
       ...list,
       items: updatedItems,
-      lastUpdated: Date.now(),
+      lastUpdated: now,
     };
     await this.saveList(userId, updatedList.category, updatedList);
     return {
-      type: "update_item",
+      type: "update_items",
       category: updatedList.category,
       changed: true,
       itemNames: changedUpdates.map((itemUpdate) => itemUpdate.newItemName),
@@ -219,7 +218,7 @@ export class ShoppingRepository {
 
     if (normalizedItemNames.length === 0) {
       return {
-        type: "remove_item",
+        type: "remove_items",
         category: list.category,
         changed: false,
         itemNames: [],
@@ -238,7 +237,7 @@ export class ShoppingRepository {
 
     if (removedItems.length === 0) {
       return {
-        type: "remove_item",
+        type: "remove_items",
         category: list.category,
         changed: false,
         itemNames: normalizedItemNames,
@@ -253,7 +252,7 @@ export class ShoppingRepository {
     };
     await this.saveList(userId, updatedList.category, updatedList);
     return {
-      type: "remove_item",
+      type: "remove_items",
       category: updatedList.category,
       changed: true,
       itemNames: removedItems.map((item) => item.name),
@@ -302,10 +301,8 @@ export class ShoppingRepository {
     await this.store.saveList(userId, category, list);
   }
 
-  private findItemIndex(items: ShoppingItem[], itemName: string): number {
+  private itemNameMatches(item: ShoppingItem, itemName: string): boolean {
     const normalizedName = itemName.trim().toLowerCase();
-    return items.findIndex(
-      (item) => item.name.trim().toLowerCase() === normalizedName,
-    );
+    return item.name.trim().toLowerCase() === normalizedName;
   }
 }

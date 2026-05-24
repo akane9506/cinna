@@ -3,7 +3,7 @@ import { BrainResponse } from "../../core/types";
 import { logger } from "../../core/logger";
 import { normalizeShoppingCategory, ShoppingRepository } from "./repository";
 import {
-  assertAddItemCommands,
+  assertAddItemsCommands,
   generateShoppingReply,
   ShoppingPlannerInput,
   ShoppingPlannerOutput,
@@ -34,7 +34,7 @@ export const createShoppingHandler = (
     let commands;
     try {
       const plan = await planner({ userText, brainResponse });
-      commands = assertAddItemCommands(plan.commands);
+      commands = assertAddItemsCommands(plan.commands);
     } catch (error) {
       logger.info(
         { error, action: brainResponse.action },
@@ -52,7 +52,7 @@ export const createShoppingHandler = (
     for (const command of commands) {
       const category = normalizeShoppingCategory(command.category);
       const itemNames = itemNamesByCategory.get(category) ?? [];
-      itemNames.push(command.itemName);
+      itemNames.push(...command.itemNames);
       itemNamesByCategory.set(category, itemNames);
     }
 

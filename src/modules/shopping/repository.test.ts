@@ -41,6 +41,7 @@ describe("normalizeShoppingCategory", () => {
 
   it("preserves known categories and falls unknown categories back to other", () => {
     expect(normalizeShoppingCategory("pharmacy")).toBe("pharmacy");
+    expect(normalizeShoppingCategory("stationery")).toBe("stationery");
     expect(normalizeShoppingCategory("hardware")).toBe("other");
   });
 });
@@ -54,7 +55,7 @@ describe("ShoppingRepository", () => {
     const listResult = await repository.listItems("user-1", "grocery");
 
     expect(addResult).toMatchObject({
-      type: "add_item",
+      type: "add_items",
       category: "grocery",
       changed: true,
       itemNames: ["milk"],
@@ -97,7 +98,7 @@ describe("ShoppingRepository", () => {
     const result = await repository.addItems("user-1", ["screws"], "hardware");
 
     expect(result).toMatchObject({
-      type: "add_item",
+      type: "add_items",
       category: "other",
       changed: true,
       itemNames: ["screws"],
@@ -112,7 +113,7 @@ describe("ShoppingRepository", () => {
     const result = await repository.addItems("user-1", [" ", ""], "grocery");
 
     expect(result).toMatchObject({
-      type: "add_item",
+      type: "add_items",
       category: "grocery",
       changed: false,
       itemNames: [],
@@ -131,7 +132,7 @@ describe("ShoppingRepository", () => {
     ]);
 
     expect(result).toMatchObject({
-      type: "update_item",
+      type: "update_items",
       category: "grocery",
       changed: true,
       itemNames: ["oat milk", "brown eggs"],
@@ -142,6 +143,29 @@ describe("ShoppingRepository", () => {
         (item) => item.name,
       ),
     ).toEqual(["oat milk", "brown eggs"]);
+  });
+
+  it("updates every matching item while preserving addedAt", async () => {
+    const store = new InMemoryShoppingListStore();
+    const repository = new ShoppingRepository(store);
+    await repository.addItems("user-1", ["milk", "milk", "eggs"]);
+    const originalItems = (await repository.listItems("user-1")).items;
+
+    const result = await repository.updateItems("user-1", [
+      { existingItemName: "milk", newItemName: "oat milk" },
+    ]);
+
+    expect(result).toMatchObject({
+      type: "update_items",
+      changed: true,
+      itemNames: ["oat milk", "oat milk"],
+      previousItemNames: ["milk", "milk"],
+    });
+    expect((await repository.listItems("user-1")).items).toEqual([
+      { name: "oat milk", addedAt: originalItems[0].addedAt },
+      { name: "oat milk", addedAt: originalItems[1].addedAt },
+      { name: "eggs", addedAt: originalItems[2].addedAt },
+    ]);
   });
 
   it("does not write when updating a missing shopping item", async () => {
@@ -173,7 +197,7 @@ describe("ShoppingRepository", () => {
     const result = await repository.removeItems("user-1", ["milk", "EGGS"]);
 
     expect(result).toMatchObject({
-      type: "remove_item",
+      type: "remove_items",
       changed: true,
       itemNames: ["milk", "eggs"],
     });
@@ -191,7 +215,7 @@ describe("ShoppingRepository", () => {
     const result = await repository.removeItems("user-1", ["milk"]);
 
     expect(result).toMatchObject({
-      type: "remove_item",
+      type: "remove_items",
       category: "grocery",
       changed: false,
       itemNames: ["milk"],

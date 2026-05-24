@@ -1,14 +1,14 @@
 import { describe, expect, it } from "bun:test";
 import { BrainResponse } from "../../core/types";
 import {
-  assertAddItemCommands,
+  assertAddItemsCommands,
   createShoppingPlanner,
   createShoppingReplyGenerator,
   formatShoppingReply,
 } from "./planner";
 
 describe("createShoppingPlanner", () => {
-  it("plans multiple add_item commands from structured LLM output", async () => {
+  it("plans an add_items command from structured LLM output", async () => {
     const response: BrainResponse = {
       intent: "SHOPPING",
       language: "en",
@@ -19,13 +19,8 @@ describe("createShoppingPlanner", () => {
       text: JSON.stringify({
         commands: [
           {
-            type: "add_item",
-            itemName: "milk",
-            category: "grocery",
-          },
-          {
-            type: "add_item",
-            itemName: "eggs",
+            type: "add_items",
+            itemNames: ["milk", "eggs"],
             category: "grocery",
           },
         ],
@@ -40,13 +35,8 @@ describe("createShoppingPlanner", () => {
     ).resolves.toEqual({
       commands: [
         {
-          type: "add_item",
-          itemName: "milk",
-          category: "grocery",
-        },
-        {
-          type: "add_item",
-          itemName: "eggs",
+          type: "add_items",
+          itemNames: ["milk", "eggs"],
           category: "grocery",
         },
       ],
@@ -58,8 +48,8 @@ describe("createShoppingPlanner", () => {
       text: JSON.stringify({
         commands: [
           {
-            type: "add_item",
-            itemName: "screws",
+            type: "add_items",
+            itemNames: ["screws"],
             category: "hardware",
           },
         ],
@@ -79,9 +69,43 @@ describe("createShoppingPlanner", () => {
     ).resolves.toEqual({
       commands: [
         {
-          type: "add_item",
-          itemName: "screws",
+          type: "add_items",
+          itemNames: ["screws"],
           category: "other",
+        },
+      ],
+    });
+  });
+
+  it("preserves stationery categories", async () => {
+    const planner = createShoppingPlanner(async () => ({
+      text: JSON.stringify({
+        commands: [
+          {
+            type: "add_items",
+            itemNames: ["notebooks", "shipping labels"],
+            category: "stationery",
+          },
+        ],
+      }),
+    }));
+
+    await expect(
+      planner({
+        userText: "add notebooks and shipping labels",
+        brainResponse: {
+          intent: "SHOPPING",
+          language: "en",
+          reply: "Added notebooks and shipping labels.",
+          action: "add",
+        },
+      }),
+    ).resolves.toEqual({
+      commands: [
+        {
+          type: "add_items",
+          itemNames: ["notebooks", "shipping labels"],
+          category: "stationery",
         },
       ],
     });
@@ -104,20 +128,20 @@ describe("createShoppingPlanner", () => {
   });
 });
 
-describe("assertAddItemCommands", () => {
-  it("allows add_item commands", () => {
+describe("assertAddItemsCommands", () => {
+  it("allows add_items commands", () => {
     expect(
-      assertAddItemCommands([
+      assertAddItemsCommands([
         {
-          type: "add_item",
-          itemName: "milk",
+          type: "add_items",
+          itemNames: ["milk"],
           category: "grocery",
         },
       ]),
     ).toEqual([
       {
-        type: "add_item",
-        itemName: "milk",
+        type: "add_items",
+        itemNames: ["milk"],
         category: "grocery",
       },
     ]);
@@ -125,8 +149,8 @@ describe("assertAddItemCommands", () => {
 
   it("rejects unsupported shopping actions for the first slice", () => {
     expect(() =>
-      assertAddItemCommands([{ type: "list_items", category: "grocery" }]),
-    ).toThrow("Only shopping add_item is supported right now.");
+      assertAddItemsCommands([{ type: "list_items", category: "grocery" }]),
+    ).toThrow("Only shopping add_items is supported right now.");
   });
 
   it("rejects empty command lists before execution", async () => {
@@ -149,12 +173,12 @@ describe("assertAddItemCommands", () => {
 });
 
 describe("formatShoppingReply", () => {
-  it("formats add_item replies from repository results after persistence", () => {
+  it("formats add_items replies from repository results after persistence", () => {
     expect(
       formatShoppingReply(
         [
           {
-            type: "add_item",
+            type: "add_items",
             category: "grocery",
             changed: true,
             itemNames: ["milk", "eggs"],
@@ -165,12 +189,12 @@ describe("formatShoppingReply", () => {
     ).toBe("Done～ I added milk, eggs to your grocery shopping list. (u･ω･u)");
   });
 
-  it("formats Chinese add_item replies with category when shop is absent", () => {
+  it("formats Chinese add_items replies with category when shop is absent", () => {
     expect(
       formatShoppingReply(
         [
           {
-            type: "add_item",
+            type: "add_items",
             category: "grocery",
             changed: true,
             itemNames: ["两箱全脂牛奶(milk)"],
@@ -196,7 +220,7 @@ describe("createShoppingReplyGenerator", () => {
         language: "zh",
         results: [
           {
-            type: "add_item",
+            type: "add_items",
             category: "grocery",
             changed: true,
             itemNames: ["milk"],
@@ -217,7 +241,7 @@ describe("createShoppingReplyGenerator", () => {
         language: "en",
         results: [
           {
-            type: "add_item",
+            type: "add_items",
             category: "grocery",
             changed: true,
             itemNames: ["milk"],
