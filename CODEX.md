@@ -18,11 +18,14 @@ The current implementation supports:
 - Short-term in-memory chat history with bounded sessions.
 - Firebase Admin initialization for Firestore with explicit project/database
   configuration and startup logging.
-- Shopping schemas and a tested Firestore repository foundation for add, list,
-  update, remove, and clear operations.
-- Shopping `add_item` flow uses Brain routing, a second structured shopping
-  planner call, Firestore writes, then a persona reply generated from persisted
-  results.
+- Shopping schemas and a tested Firestore repository foundation for batched add,
+  list, update, remove, and clear operations.
+- Shopping `add_items` flow uses Brain routing, a second structured shopping
+  planner call, category-grouped Firestore writes, then a persona reply generated
+  from persisted operation results.
+- The Telegram handler currently accepts only `add_items`; other shopping
+  command shapes are modeled and repository-tested but still rejected at the
+  handler boundary.
 - Placeholder voice message handling.
 - Placeholder feedback dispatch path.
 
@@ -109,10 +112,11 @@ Follow the roadmap and status checklist in `CINNA_PLAN.md`. The next major
 unfinished work is Phase 3, implemented as vertical end-to-end shopping action
 slices:
 
-- First: `add_item` from Telegram text through planner, service, repository,
-  Firestore write, and user reply.
-- Then: `list_items`, `remove_item`, `update_item`, and `clear_list` as separate
-  verified slices.
+- First: finish hardening `add_items` from Telegram text through planner,
+  repository, Firestore writes, and user reply. The unit-tested implementation
+  already supports multi-item and multi-category add batches.
+- Then: wire `list_items`, `remove_items`, `update_items`, and `clear_list` into
+  the handler/reply path as separate verified slices.
 - Finish with a full shopping-list smoke flow against the configured development
   Firestore database.
 
@@ -136,9 +140,12 @@ user text -> Brain intent reply -> shopping planner structured commands
 ```
 
 This lets one user message produce multiple storage operations, such as adding
-several shopping items at once, while keeping replies grounded in saved data.
+several shopping items across different categories at once, while keeping replies
+grounded in saved data. For now, non-add shopping commands must stay modeled as
+planner/repository capabilities until the handler has a complete response flow
+for each action.
 
-## Planned Firestore Shape
+## Firestore Shape
 
 Start with the simplest useful shopping-list model: one list document per
 planner-controlled category, scoped under the Telegram user. If the planner does
@@ -152,7 +159,8 @@ users/{userId}/shoppingLists/{category}
 Use one of the controlled category ids as the document id:
 
 - No category provided: `grocery`
-- Supported categories: `grocery`, `pharmacy`, `pet_store`, `toy_shop`, `other`
+- Supported categories: `grocery`, `pharmacy`, `pet_store`, `toy_shop`,
+  `stationery`, `other`
 - Unknown category: `other`
 
 Keep the document shape compact:
@@ -164,7 +172,13 @@ export interface ShoppingListItem {
 }
 
 export interface ShoppingListDoc {
-  category: "grocery" | "pharmacy" | "pet_store" | "toy_shop" | "other";
+  category:
+    | "grocery"
+    | "pharmacy"
+    | "pet_store"
+    | "toy_shop"
+    | "stationery"
+    | "other";
   items: ShoppingListItem[];
   lastUpdated: number; // epoch milliseconds
 }

@@ -9,6 +9,17 @@ message, the shopping planner runs a second structured LLM pass to create one or
 more DB commands, the repository saves them to Firestore, then Cinna generates a
 persona reply from the persisted result.
 
+The Telegram path currently supports batched `add_items` requests. The planner
+can split one user message across category-specific commands, and the handler
+groups those commands before writing to Firestore. Repository schemas and unit
+tests also cover `list_items`, `remove_items`, `update_items`, and `clear_list`,
+but those actions are still intentionally rejected by the Telegram handler until
+their full reply flows are implemented.
+
+Shopping lists are stored by controlled category under
+`users/{telegramUserId}/shoppingLists/{category}`. Supported categories are
+`grocery`, `pharmacy`, `pet_store`, `toy_shop`, `stationery`, and `other`.
+
 ## Local Prompt Files
 
 Prompt files are local and git-ignored. Add or edit them here:

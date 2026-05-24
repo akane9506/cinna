@@ -8,7 +8,7 @@ The system follows a "Brain & Modules" pattern:
 
 - **Core Brain (Gemini 3 Flash):** Acts as the intent router and transcription engine, utilizing its pro-grade reasoning to handle complex requests.
 - **Feature Modules:** Independent logic for specific tasks (Shopping, Reminders, etc.).
-- **Domain Planners:** Module-specific LLM services convert conversational intent into validated, storage-safe commands. For shopping lists, the planner should produce DB operations such as `add_item`, `remove_item`, `update_item`, `list_items`, and `clear_list`.
+- **Domain Planners:** Module-specific LLM services convert conversational intent into validated, storage-safe commands. For shopping lists, the planner should produce DB operations such as `add_items`, `remove_items`, `update_items`, `list_items`, and `clear_list`.
 - **Persistence Layer:** Firestore repositories own reads/writes and keep storage details out of the dispatcher and LLM prompts.
 - **Response Engine:** Ensures responses match the user's input language and are grounded in actual operation results when persistence is involved.
 
@@ -31,8 +31,8 @@ Telegram message
   -> Shopping Planner
      - run a second structured LLM pass
      - convert user text + BrainResponse + current state into strict DB commands
-     - split multi-item requests into multiple commands
-  -> Shopping Service / Repository
+     - split multi-item requests into category-specific commands
+  -> Shopping Handler / Repository
      - validate and execute Firestore operations
   -> Reply
      - generate persona reply from actual DB results after persistence succeeds
@@ -54,13 +54,12 @@ cinna/
 │   │   ├── brain.ts          # Gemini & Function Calling
 │   │   └── config.ts         # Env validation (Zod)
 │   ├── modules/
-│   │   ├── shopping/         # Shopping module logic
-│   │   │   ├── handler.ts
-│   │   │   ├── planner.ts
-│   │   │   ├── repository.ts
-│   │   │   ├── types.ts
-│   │   │   └── service.ts
-│   │   └── shared/           # Cross-module utils
+│   │   └── shopping/         # Shopping module logic
+│   │       ├── handler.ts
+│   │       ├── planner.ts
+│   │       ├── repository.ts
+│   │       ├── types.ts
+│   │       └── prompts/
 │   ├── services/
 │   │   └── audio.ts          # Telegram voice downloader
 │   ├── index.ts              # Entry point (Bun + Hono)
@@ -180,36 +179,39 @@ The goal of this phase is to finish the persistent shopping-list function end to
     ```
   - Store `category`, an `items` array, and `lastUpdated` as epoch milliseconds; each item should contain `name` and `addedAt` as epoch milliseconds.
   - _Verification:_ [x] Repository unit tests cover add, list, update, remove, and clear using a mocked Firestore adapter.
-- **Step 3.3.1: End-to-End `add_item` Slice**
-  - Implement only enough planner, service, handler, dispatcher wiring, and reply formatting for `add_item`.
-  - The full path must be: Telegram text -> core Brain routes `SHOPPING` -> shopping planner returns validated `add_item` -> service calls `repository.addItem` -> Firestore is updated -> bot replies from the repository result.
+- **Step 3.3.1: End-to-End `add_items` Slice**
+  - Implement only enough planner, handler, dispatcher wiring, and reply formatting for `add_items`.
+  - The full path must be: Telegram text -> core Brain routes `SHOPPING` -> shopping planner returns validated `add_items` -> handler groups items by normalized category -> repository writes the grouped batch -> Firestore is updated -> bot replies from the repository results.
   - Keep unsupported shopping actions explicitly unimplemented or safely rejected in this slice.
-  - _Verification:_ [ ] Unit tests cover `add_item` planner parsing, command execution, reply formatting, handler orchestration, and dispatcher routing.
+  - _Verification:_ [x] Unit tests cover `add_items` planner parsing, command execution, reply formatting, handler orchestration, and dispatcher routing.
   - _Verification:_ [ ] Manual Telegram test adds one item to the configured development Firestore database and the bot replies with the persisted item/category.
 - **Step 3.3.1a: Replace Free-Form Store Text with List Category**
   - Free-form store/place text is not reliable enough as a grouping or display field. Replace it with a broader planner-controlled category before building more shopping slices.
-  - Suggested initial categories: `grocery`, `pharmacy`, `pet_store`, `toy_shop`, `other`.
+  - Current categories: `grocery`, `pharmacy`, `pet_store`, `toy_shop`, `stationery`, `other`.
   - Do not persist free-form shop/place text.
-  - _Verification:_ [x] Planner/schema/repository tests cover category normalization and unknown category fallback to `other`.
+  - _Verification:_ [x] Planner/schema/repository tests cover category normalization, `stationery`, and unknown category fallback to `other`.
 - **Step 3.3.2: End-to-End `list_items` Slice**
-  - Extend the planner, service, handler, dispatcher tests, and replies for `list_items`.
+  - Extend the planner, handler, dispatcher tests, and replies for `list_items`.
   - List replies must be built from Firestore results, not Gemini-generated prose.
   - _Verification:_ [ ] Unit tests cover `list_items` planning/execution/reply behavior for empty and non-empty lists.
   - _Verification:_ [ ] Manual Telegram test lists the item added in Step 3.3.1 from the configured development Firestore database.
-- **Step 3.3.3: End-to-End `remove_item` Slice**
-  - Extend the same path for `remove_item`.
+- **Step 3.3.3: End-to-End `remove_items` Slice**
+  - Extend the same path for `remove_items`.
   - Missing-item behavior should be explicit and user-facing.
-  - _Verification:_ [ ] Unit tests cover successful removal and missing-item results.
+  - _Verification:_ [x] Repository unit tests cover successful removal and missing-item operation results.
+  - _Verification:_ [ ] Handler/reply unit tests cover successful removal and missing-item user replies.
   - _Verification:_ [ ] Manual Telegram test removes an item from Firestore and confirms the reply reflects the repository result.
-- **Step 3.3.4: End-to-End `update_item` Slice**
-  - Extend the same path for `update_item`.
+- **Step 3.3.4: End-to-End `update_items` Slice**
+  - Extend the same path for `update_items`.
   - Use current list state as planner context when needed so rename/update requests target existing items safely.
-  - _Verification:_ [ ] Unit tests cover successful update and missing-item results.
+  - _Verification:_ [x] Repository unit tests cover successful update and missing-item operation results.
+  - _Verification:_ [ ] Handler/reply unit tests cover successful update and missing-item user replies.
   - _Verification:_ [ ] Manual Telegram test updates an item in Firestore and confirms the reply/list reflect the new item name.
 - **Step 3.3.5: End-to-End `clear_list` Slice**
   - Extend the same path for `clear_list`.
   - Clearing should reply from the repository result and make the final stored list empty.
-  - _Verification:_ [ ] Unit tests cover clearing non-empty and already-empty lists.
+  - _Verification:_ [x] Repository unit tests cover clearing non-empty and already-empty lists.
+  - _Verification:_ [ ] Handler/reply unit tests cover clearing non-empty and already-empty lists.
   - _Verification:_ [ ] Manual Telegram test clears the development Firestore list and confirms a follow-up list is empty.
 - **Step 3.3.6: Full Shopping Smoke Test**
   - Add a manual smoke script or checklist that runs add, list, update, remove, and clear against configured `FIREBASE_PROJECT_ID` and `FIRESTORE_DATABASE_ID`.
