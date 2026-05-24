@@ -58,13 +58,11 @@ export const createShoppingHandler = (
 
     let results;
     try {
-      results = (
-        await Promise.all(
-          [...itemNamesByCategory.entries()].map(([category, itemNames]) =>
-            repository.addItems(userId, itemNames, category),
-          ),
-        )
-      ).flat();
+      results = await Promise.all(
+        [...itemNamesByCategory.entries()].map(([category, itemNames]) =>
+          repository.addItems(userId, itemNames, category),
+        ),
+      );
     } catch (error) {
       logger.error({ error, userId }, "Failed to persist shopping items");
       await ctx.reply(

@@ -145,7 +145,7 @@ const buildReplyPrompt = ({
     persistedResults: results.map((result) => ({
       type: result.type,
       category: result.category,
-      itemName: result.itemName,
+      itemNames: "itemNames" in result ? result.itemNames : undefined,
       changed: result.changed,
     })),
   });
@@ -212,9 +212,9 @@ export const formatShoppingReply = (
       : "That shopping action is not supported yet.";
   }
 
-  const itemNames = results
-    .map((result) => result.itemName)
-    .filter((itemName): itemName is string => Boolean(itemName));
+  const itemNames = results.flatMap((result) =>
+    "itemNames" in result ? result.itemNames : [],
+  );
   const firstResult = results[0];
   const listName = firstResult?.category ?? "grocery";
 

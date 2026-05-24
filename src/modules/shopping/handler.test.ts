@@ -3,28 +3,12 @@ import { createShoppingHandler } from "./handler";
 
 describe("createShoppingHandler", () => {
   it("plans and adds multiple items before replying with persisted details", async () => {
-    const addItems = mock(async () => [
-      {
-        type: "add_item" as const,
-        category: "grocery" as const,
-        items: [
-          { name: "milk", addedAt: 1 },
-          { name: "eggs", addedAt: 1 },
-        ],
-        changed: true,
-        itemName: "milk",
-      },
-      {
-        type: "add_item" as const,
-        category: "grocery" as const,
-        items: [
-          { name: "milk", addedAt: 1 },
-          { name: "eggs", addedAt: 1 },
-        ],
-        changed: true,
-        itemName: "eggs",
-      },
-    ]);
+    const addItems = mock(async () => ({
+      type: "add_item" as const,
+      category: "grocery" as const,
+      changed: true,
+      itemNames: ["milk", "eggs"],
+    }));
     const planner = mock(async () => ({
       commands: [
         {
@@ -79,22 +63,8 @@ describe("createShoppingHandler", () => {
         {
           type: "add_item",
           category: "grocery",
-          items: [
-            { name: "milk", addedAt: 1 },
-            { name: "eggs", addedAt: 1 },
-          ],
           changed: true,
-          itemName: "milk",
-        },
-        {
-          type: "add_item",
-          category: "grocery",
-          items: [
-            { name: "milk", addedAt: 1 },
-            { name: "eggs", addedAt: 1 },
-          ],
-          changed: true,
-          itemName: "eggs",
+          itemNames: ["milk", "eggs"],
         },
       ],
     });

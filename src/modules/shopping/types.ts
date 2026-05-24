@@ -44,20 +44,33 @@ export const ShoppingPlannerCommandSchema = z.discriminatedUnion("type", [
   }),
 ]);
 
-export const ShoppingOperationResultSchema = z.object({
-  type: z.enum([
-    "add_item",
-    "remove_item",
-    "update_item",
-    "list_items",
-    "clear_list",
-  ]),
+const ShoppingOperationResultBaseSchema = z.object({
   category: ShoppingCategorySchema,
-  items: z.array(ShoppingItemSchema),
   changed: z.boolean(),
-  itemName: z.string().optional(),
-  previousItemName: z.string().optional(),
 });
+
+export const ShoppingOperationResultSchema = z.discriminatedUnion("type", [
+  ShoppingOperationResultBaseSchema.extend({
+    type: z.literal("add_item"),
+    itemNames: z.array(z.string()),
+  }),
+  ShoppingOperationResultBaseSchema.extend({
+    type: z.literal("remove_item"),
+    itemNames: z.array(z.string()),
+  }),
+  ShoppingOperationResultBaseSchema.extend({
+    type: z.literal("update_item"),
+    itemNames: z.array(z.string()),
+    previousItemNames: z.array(z.string()),
+  }),
+  ShoppingOperationResultBaseSchema.extend({
+    type: z.literal("list_items"),
+    items: z.array(ShoppingItemSchema),
+  }),
+  ShoppingOperationResultBaseSchema.extend({
+    type: z.literal("clear_list"),
+  }),
+]);
 
 export type ShoppingItem = z.infer<typeof ShoppingItemSchema>;
 export type ShoppingListDoc = z.infer<typeof ShoppingListDocSchema>;

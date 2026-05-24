@@ -50,14 +50,14 @@ describe("ShoppingRepository", () => {
     const store = new InMemoryShoppingListStore();
     const repository = new ShoppingRepository(store);
 
-    const addResult = await repository.addItem("user-1", "milk", "grocery");
+    const addResult = await repository.addItems("user-1", ["milk"], "grocery");
     const listResult = await repository.listItems("user-1", "grocery");
 
     expect(addResult).toMatchObject({
       type: "add_item",
       category: "grocery",
       changed: true,
-      itemName: "milk",
+      itemNames: ["milk"],
     });
     expect(listResult.items.map((item) => item.name)).toEqual(["milk"]);
     expect(Number.isInteger(listResult.items[0].addedAt)).toBe(true);
@@ -71,27 +71,17 @@ describe("ShoppingRepository", () => {
   it("adds multiple shopping items to one category with a single save", async () => {
     const store = new InMemoryShoppingListStore();
     const repository = new ShoppingRepository(store);
-    await repository.addItem("user-1", "bread", "grocery");
+    await repository.addItems("user-1", ["bread"], "grocery");
     const saveCountAfterFirstAdd = store.saveCount;
 
-    const results = await repository.addItems("user-1", [
+    const result = await repository.addItems("user-1", [
       "milk",
       "eggs",
       "butter",
     ]);
 
-    expect(results.map((result) => result.itemName)).toEqual([
-      "milk",
-      "eggs",
-      "butter",
-    ]);
-    expect(results.every((result) => result.category === "grocery")).toBe(true);
-    expect(results[0].items.map((item) => item.name)).toEqual([
-      "bread",
-      "milk",
-      "eggs",
-      "butter",
-    ]);
+    expect(result.itemNames).toEqual(["milk", "eggs", "butter"]);
+    expect(result.category).toBe("grocery");
     expect(store.saveCount).toBe(saveCountAfterFirstAdd + 1);
     expect(
       (await repository.listItems("user-1", "grocery")).items.map(
@@ -104,74 +94,107 @@ describe("ShoppingRepository", () => {
     const store = new InMemoryShoppingListStore();
     const repository = new ShoppingRepository(store);
 
-    const result = await repository.addItem("user-1", "screws", "hardware");
+    const result = await repository.addItems("user-1", ["screws"], "hardware");
 
     expect(result).toMatchObject({
       type: "add_item",
       category: "other",
       changed: true,
-      itemName: "screws",
+      itemNames: ["screws"],
     });
     expect(store.lists.has("user-1/other")).toBe(true);
   });
 
-  it("updates an existing shopping item", async () => {
+  it("does not write when there are no item names to add", async () => {
     const store = new InMemoryShoppingListStore();
     const repository = new ShoppingRepository(store);
-    await repository.addItem("user-1", "milk");
 
-    const result = await repository.updateItem("user-1", "MILK", "oat milk");
+    const result = await repository.addItems("user-1", [" ", ""], "grocery");
+
+    expect(result).toMatchObject({
+      type: "add_item",
+      category: "grocery",
+      changed: false,
+      itemNames: [],
+    });
+    expect(store.saveCount).toBe(0);
+  });
+
+  it("updates existing shopping items in a batch", async () => {
+    const store = new InMemoryShoppingListStore();
+    const repository = new ShoppingRepository(store);
+    await repository.addItems("user-1", ["milk", "eggs"]);
+
+    const result = await repository.updateItems("user-1", [
+      { existingItemName: "MILK", newItemName: "oat milk" },
+      { existingItemName: "eggs", newItemName: "brown eggs" },
+    ]);
 
     expect(result).toMatchObject({
       type: "update_item",
       category: "grocery",
       changed: true,
-      itemName: "oat milk",
-      previousItemName: "MILK",
+      itemNames: ["oat milk", "brown eggs"],
+      previousItemNames: ["MILK", "eggs"],
     });
-    expect(result.items.map((item) => item.name)).toEqual(["oat milk"]);
+    expect(
+      (await repository.listItems("user-1", "grocery")).items.map(
+        (item) => item.name,
+      ),
+    ).toEqual(["oat milk", "brown eggs"]);
   });
 
   it("does not write when updating a missing shopping item", async () => {
     const store = new InMemoryShoppingListStore();
     const repository = new ShoppingRepository(store);
-    await repository.addItem("user-1", "milk");
+    await repository.addItems("user-1", ["milk"]);
     const saveCountAfterAdd = store.lists.size;
 
-    const result = await repository.updateItem("user-1", "eggs", "brown eggs");
+    const result = await repository.updateItems("user-1", [
+      { existingItemName: "eggs", newItemName: "brown eggs" },
+    ]);
 
     expect(result.changed).toBe(false);
-    expect(result.items.map((item) => item.name)).toEqual(["milk"]);
+    expect(result.itemNames).toEqual(["brown eggs"]);
+    expect(result.previousItemNames).toEqual(["eggs"]);
+    expect(
+      (await repository.listItems("user-1", "grocery")).items.map(
+        (item) => item.name,
+      ),
+    ).toEqual(["milk"]);
     expect(store.lists.size).toBe(saveCountAfterAdd);
   });
 
-  it("removes an existing shopping item", async () => {
+  it("removes existing shopping items in a batch", async () => {
     const store = new InMemoryShoppingListStore();
     const repository = new ShoppingRepository(store);
-    await repository.addItem("user-1", "milk");
-    await repository.addItem("user-1", "eggs");
+    await repository.addItems("user-1", ["milk", "eggs", "butter"]);
 
-    const result = await repository.removeItem("user-1", "milk");
+    const result = await repository.removeItems("user-1", ["milk", "EGGS"]);
 
     expect(result).toMatchObject({
       type: "remove_item",
       changed: true,
-      itemName: "milk",
+      itemNames: ["milk", "eggs"],
     });
-    expect(result.items.map((item) => item.name)).toEqual(["eggs"]);
+    expect(
+      (await repository.listItems("user-1", "grocery")).items.map(
+        (item) => item.name,
+      ),
+    ).toEqual(["butter"]);
   });
 
   it("does not write when removing a missing shopping item", async () => {
     const store = new InMemoryShoppingListStore();
     const repository = new ShoppingRepository(store);
 
-    const result = await repository.removeItem("user-1", "milk");
+    const result = await repository.removeItems("user-1", ["milk"]);
 
     expect(result).toMatchObject({
       type: "remove_item",
       category: "grocery",
       changed: false,
-      itemName: "milk",
+      itemNames: ["milk"],
     });
     expect(store.lists.size).toBe(0);
   });
@@ -179,7 +202,7 @@ describe("ShoppingRepository", () => {
   it("clears an existing shopping list", async () => {
     const store = new InMemoryShoppingListStore();
     const repository = new ShoppingRepository(store);
-    await repository.addItem("user-1", "milk", "grocery");
+    await repository.addItems("user-1", ["milk"], "grocery");
 
     const result = await repository.clearList("user-1", "grocery");
 
@@ -188,7 +211,6 @@ describe("ShoppingRepository", () => {
       category: "grocery",
       changed: true,
     });
-    expect(result.items).toEqual([]);
     expect((await repository.listItems("user-1", "grocery")).items).toEqual([]);
   });
 });
