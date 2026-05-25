@@ -71,7 +71,13 @@ describe("createShoppingHandler", () => {
       throw new Error("should not be called");
     });
     const planner = mock(async () => ({
-      commands: [{ type: "list_items" as const, category: "grocery" as const }],
+      commands: [
+        {
+          type: "remove_items" as const,
+          itemNames: ["milk"],
+          category: "grocery" as const,
+        },
+      ],
     }));
     const replyGenerator = mock(async () => "should not be called");
     const reply = mock(async () => {});
@@ -92,13 +98,139 @@ describe("createShoppingHandler", () => {
         reply: "List groceries.",
         action: "list",
       },
-      "what is on my Costco list?",
+      "remove milk",
     );
 
     expect(addItems).not.toHaveBeenCalled();
     expect(replyGenerator).not.toHaveBeenCalled();
     expect(reply).toHaveBeenCalledWith(
       "That shopping action is not supported yet.",
+    );
+  });
+
+  it("plans and lists items before replying with Firestore results", async () => {
+    const listItems = mock(async () => ({
+      type: "list_items" as const,
+      category: "grocery" as const,
+      changed: false,
+      items: [
+        { name: "milk", addedAt: 1 },
+        { name: "eggs", addedAt: 2 },
+      ],
+    }));
+    const planner = mock(async () => ({
+      commands: [{ type: "list_items" as const, category: "grocery" as const }],
+    }));
+    const replyGenerator = mock(async () => "Your grocery shopping list has.");
+    const reply = mock(async () => {});
+    const handler = createShoppingHandler(
+      { listItems } as any,
+      planner,
+      replyGenerator,
+    );
+
+    await handler(
+      {
+        from: { id: 123 },
+        reply,
+      } as any,
+      {
+        intent: "SHOPPING",
+        language: "en",
+        reply: "AI reply should not be used.",
+        action: "list",
+      },
+      "what is on my grocery list?",
+    );
+
+    expect(listItems).toHaveBeenCalledWith("123", "grocery");
+    expect(replyGenerator).toHaveBeenCalledWith({
+      userText: "what is on my grocery list?",
+      language: "en",
+      results: [
+        {
+          type: "list_items",
+          category: "grocery",
+          changed: false,
+          items: [
+            { name: "milk", addedAt: 1 },
+            { name: "eggs", addedAt: 2 },
+          ],
+        },
+      ],
+    });
+    expect(reply).toHaveBeenCalledWith("Your grocery shopping list has.");
+  });
+
+  it("replies with an empty list result", async () => {
+    const listItems = mock(async () => ({
+      type: "list_items" as const,
+      category: "pharmacy" as const,
+      changed: false,
+      items: [],
+    }));
+    const planner = mock(async () => ({
+      commands: [{ type: "list_items" as const, category: "pharmacy" as const }],
+    }));
+    const replyGenerator = mock(async () => "Your pharmacy list is empty.");
+    const reply = mock(async () => {});
+    const handler = createShoppingHandler(
+      { listItems } as any,
+      planner,
+      replyGenerator,
+    );
+
+    await handler(
+      {
+        from: { id: 123 },
+        reply,
+      } as any,
+      {
+        intent: "SHOPPING",
+        language: "en",
+        reply: "AI reply should not be used.",
+        action: "list",
+      },
+      "what is on my pharmacy list?",
+    );
+
+    expect(listItems).toHaveBeenCalledWith("123", "pharmacy");
+    expect(reply).toHaveBeenCalledWith("Your pharmacy list is empty.");
+  });
+
+  it("replies with a read error when listing fails", async () => {
+    const listItems = mock(async () => {
+      throw new Error("database unavailable");
+    });
+    const planner = mock(async () => ({
+      commands: [{ type: "list_items" as const, category: "grocery" as const }],
+    }));
+    const replyGenerator = mock(async () => "should not be called");
+    const reply = mock(async () => {});
+    const handler = createShoppingHandler(
+      { listItems } as any,
+      planner,
+      replyGenerator,
+    );
+
+    await handler(
+      {
+        from: { id: 123 },
+        reply,
+      } as any,
+      {
+        intent: "SHOPPING",
+        language: "en",
+        reply: "AI reply should not be used.",
+        action: "list",
+      },
+      "what is on my grocery list?",
+    );
+
+    expect(listItems).toHaveBeenCalledWith("123", "grocery");
+    expect(replyGenerator).not.toHaveBeenCalled();
+    expect(reply).toHaveBeenCalledWith(
+      "Sorry, I encountered an error while reading your shopping list.",
     );
   });
 
