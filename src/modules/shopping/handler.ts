@@ -3,13 +3,17 @@ import { BrainResponse } from "../../core/types";
 import { logger } from "../../core/logger";
 import { normalizeShoppingCategory, ShoppingRepository } from "./repository";
 import {
-  assertAddItemsCommands,
+  assertSupportedShoppingCommands,
   generateShoppingReply,
   ShoppingPlannerInput,
   ShoppingPlannerOutput,
   ShoppingReplyInput,
   planShoppingCommands,
 } from "./planner";
+import { ShoppingOperationResult, ShoppingPlannerCommand } from "./types";
+
+type AddItemsCommand = Extract<ShoppingPlannerCommand, { type: "add_items" }>;
+type ListItemsCommand = Extract<ShoppingPlannerCommand, { type: "list_items" }>;
 
 export const createShoppingHandler = (
   repository: ShoppingRepository = new ShoppingRepository(),
@@ -34,7 +38,7 @@ export const createShoppingHandler = (
     let commands;
     try {
       const plan = await planner({ userText, brainResponse });
-      commands = assertAddItemsCommands(plan.commands);
+      commands = assertSupportedShoppingCommands(plan.commands);
     } catch (error) {
       logger.info(
         { error, action: brainResponse.action },
@@ -48,29 +52,45 @@ export const createShoppingHandler = (
       return;
     }
 
-    const itemNamesByCategory = new Map<string, string[]>();
-    for (const command of commands) {
-      const category = normalizeShoppingCategory(command.category);
-      const itemNames = itemNamesByCategory.get(category) ?? [];
-      itemNames.push(...command.itemNames);
-      itemNamesByCategory.set(category, itemNames);
+    const addCommands = commands.filter(
+      (command): command is AddItemsCommand => command.type === "add_items",
+    );
+    const listCommands = commands.filter(
+      (command): command is ListItemsCommand => command.type === "list_items",
+    );
+
+    const results: ShoppingOperationResult[] = [];
+
+    if (addCommands.length > 0) {
+      try {
+        results.push(
+          ...(await executeAddItems(repository, userId, addCommands)),
+        );
+      } catch (error) {
+        logger.error({ error, userId }, "Failed to persist shopping items");
+        await ctx.reply(
+          brainResponse.language === "zh"
+            ? "保存购物清单时出错了，请稍后再试。"
+            : "Sorry, I encountered an error while saving your shopping list.",
+        );
+        return;
+      }
     }
 
-    let results;
-    try {
-      results = await Promise.all(
-        [...itemNamesByCategory.entries()].map(([category, itemNames]) =>
-          repository.addItems(userId, itemNames, category),
-        ),
-      );
-    } catch (error) {
-      logger.error({ error, userId }, "Failed to persist shopping items");
-      await ctx.reply(
-        brainResponse.language === "zh"
-          ? "保存购物清单时出错了，请稍后再试。"
-          : "Sorry, I encountered an error while saving your shopping list.",
-      );
-      return;
+    if (listCommands.length > 0) {
+      try {
+        results.push(
+          ...(await executeListItems(repository, userId, listCommands)),
+        );
+      } catch (error) {
+        logger.error({ error, userId }, "Failed to list shopping items");
+        await ctx.reply(
+          brainResponse.language === "zh"
+            ? "读取购物清单时出错了，请稍后再试。"
+            : "Sorry, I encountered an error while reading your shopping list.",
+        );
+        return;
+      }
     }
 
     await ctx.reply(
@@ -81,6 +101,39 @@ export const createShoppingHandler = (
       }),
     );
   };
+};
+
+const executeAddItems = async (
+  repository: ShoppingRepository,
+  userId: string,
+  commands: AddItemsCommand[],
+): Promise<ShoppingOperationResult[]> => {
+  const itemNamesByCategory = new Map<string, string[]>();
+
+  for (const command of commands) {
+    const category = normalizeShoppingCategory(command.category);
+    const itemNames = itemNamesByCategory.get(category) ?? [];
+    itemNames.push(...command.itemNames);
+    itemNamesByCategory.set(category, itemNames);
+  }
+
+  return Promise.all(
+    [...itemNamesByCategory.entries()].map(([category, itemNames]) =>
+      repository.addItems(userId, itemNames, category),
+    ),
+  );
+};
+
+const executeListItems = async (
+  repository: ShoppingRepository,
+  userId: string,
+  commands: ListItemsCommand[],
+): Promise<ShoppingOperationResult[]> => {
+  return Promise.all(
+    commands.map((command) =>
+      repository.listItems(userId, normalizeShoppingCategory(command.category)),
+    ),
+  );
 };
 
 export const handleShoppingIntent = createShoppingHandler();

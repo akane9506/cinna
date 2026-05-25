@@ -44,6 +44,25 @@ describe("dispatchIntent", () => {
     expect(ctx.reply).not.toHaveBeenCalled();
   });
 
+  it("routes shopping list requests to the shopping handler", async () => {
+    const ctx = { reply: mock(async () => {}) } as any;
+    const response = {
+      intent: "SHOPPING",
+      language: "en",
+      reply: "AI reply should not be used.",
+      action: "list",
+    } as const;
+
+    await dispatchIntent(ctx, response, "what is on my grocery list?");
+
+    expect(mockHandleShoppingIntent).toHaveBeenCalledWith(
+      ctx,
+      response,
+      "what is on my grocery list?",
+    );
+    expect(ctx.reply).not.toHaveBeenCalled();
+  });
+
   it("continues to reply with brain text for other responses", async () => {
     const reply = mock(async () => {});
     const response = {

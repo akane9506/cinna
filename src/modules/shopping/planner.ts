@@ -32,6 +32,11 @@ export type ShoppingReplyInput = {
   results: ShoppingOperationResult[];
 };
 
+type SupportedShoppingPlannerCommand = Extract<
+  ShoppingPlannerCommand,
+  { type: "add_items" | "list_items" }
+>;
+
 type GenerateContent = (request: {
   model: string;
   contents: Content[];
@@ -155,6 +160,10 @@ export const createShoppingReplyGenerator = (
     client.models.generateContent(request),
 ) => {
   return async (input: ShoppingReplyInput): Promise<string> => {
+    if (input.results.some((result) => result.type === "list_items")) {
+      return formatShoppingReply(input.results, input.language);
+    }
+
     const persona = await getPersona();
     const replyInstruction = await getShoppingReplyInstruction();
     const response = await generateContent({
@@ -199,17 +208,56 @@ export const assertAddItemsCommands = (
   return commands as Extract<ShoppingPlannerCommand, { type: "add_items" }>[];
 };
 
+export const assertSupportedShoppingCommands = (
+  commands: ShoppingPlannerCommand[],
+): SupportedShoppingPlannerCommand[] => {
+  const unsupportedCommand = commands.find(
+    (command) =>
+      command.type !== "add_items" && command.type !== "list_items",
+  );
+  if (unsupportedCommand) {
+    throw new Error(
+      "Only shopping add_items and list_items are supported right now.",
+    );
+  }
+  return commands as SupportedShoppingPlannerCommand[];
+};
+
 export const formatShoppingReply = (
   results: ShoppingOperationResult[],
   language: string,
 ): string => {
   const unsupportedResult = results.find(
-    (result) => result.type !== "add_items",
+    (result) => result.type !== "add_items" && result.type !== "list_items",
   );
   if (unsupportedResult) {
     return language === "zh"
       ? "这个购物清单操作还没上线。"
       : "That shopping action is not supported yet.";
+  }
+
+  if (results.every((result) => result.type === "list_items")) {
+    const listResults = results as Extract<
+      ShoppingOperationResult,
+      { type: "list_items" }
+    >[];
+    const lines = listResults.flatMap((result) =>
+      result.items.map((item) => `- ${item.name}`),
+    );
+    const categoryNames = [
+      ...new Set(listResults.map((result) => result.category)),
+    ];
+    const listName = categoryNames.join(", ");
+
+    if (lines.length === 0) {
+      return language === "zh"
+        ? `${listName} 的购物清单现在是空的 (u･ω･u)`
+        : `Your ${listName} shopping list is empty. (u･ω･u)`;
+    }
+
+    return language === "zh"
+      ? `${listName} 的购物清单有：\n${lines.join("\n")}`
+      : `Your ${listName} shopping list has:\n${lines.join("\n")}`;
   }
 
   const itemNames = results.flatMap((result) =>

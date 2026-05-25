@@ -193,7 +193,7 @@ The goal of this phase is to finish the persistent shopping-list function end to
 - **Step 3.3.2: End-to-End `list_items` Slice**
   - Extend the planner, handler, dispatcher tests, and replies for `list_items`.
   - List replies must be built from Firestore results, not Gemini-generated prose.
-  - _Verification:_ [ ] Unit tests cover `list_items` planning/execution/reply behavior for empty and non-empty lists.
+  - _Verification:_ [x] Unit tests cover `list_items` planning/execution/reply behavior for empty and non-empty lists.
   - _Verification:_ [ ] Manual Telegram test lists the item added in Step 3.3.1 from the configured development Firestore database.
 - **Step 3.3.3: End-to-End `remove_items` Slice**
   - Extend the same path for `remove_items`.
