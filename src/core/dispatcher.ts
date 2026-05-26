@@ -1,7 +1,7 @@
 import { Context } from "telegraf";
 import { BrainResponse } from "./types";
 import { logger } from "./logger";
-import { handleShoppingIntent } from "../modules/shopping/handler";
+import { handleShoppingIntent } from "../modules/shopping/composition";
 
 /**
  * Dispatcher for routing detected intents to their respective module handlers.

@@ -1,5 +1,12 @@
 import { describe, expect, it, mock } from "bun:test";
-import { createShoppingHandler } from "./handler";
+import { createShoppingHandler, createShoppingService } from "./handler";
+
+type ShoppingServiceDependencies = Parameters<typeof createShoppingService>[0];
+
+const createTestShoppingHandler = (dependencies: ShoppingServiceDependencies) =>
+  createShoppingHandler({
+    service: createShoppingService(dependencies),
+  });
 
 describe("createShoppingHandler", () => {
   it("plans and adds multiple items before replying with persisted details", async () => {
@@ -20,11 +27,11 @@ describe("createShoppingHandler", () => {
     }));
     const replyGenerator = mock(async () => "Saved with persona.");
     const reply = mock(async () => {});
-    const handler = createShoppingHandler(
-      { addItems } as any,
+    const handler = createTestShoppingHandler({
+      repository: { addItems } as any,
       planner,
       replyGenerator,
-    );
+    });
 
     await handler(
       {
@@ -81,11 +88,11 @@ describe("createShoppingHandler", () => {
     }));
     const replyGenerator = mock(async () => "should not be called");
     const reply = mock(async () => {});
-    const handler = createShoppingHandler(
-      { addItems } as any,
+    const handler = createTestShoppingHandler({
+      repository: { addItems } as any,
       planner,
       replyGenerator,
-    );
+    });
 
     await handler(
       {
@@ -123,11 +130,11 @@ describe("createShoppingHandler", () => {
     }));
     const replyGenerator = mock(async () => "Your grocery shopping list has.");
     const reply = mock(async () => {});
-    const handler = createShoppingHandler(
-      { listItems } as any,
+    const handler = createTestShoppingHandler({
+      repository: { listItems } as any,
       planner,
       replyGenerator,
-    );
+    });
 
     await handler(
       {
@@ -170,15 +177,17 @@ describe("createShoppingHandler", () => {
       items: [],
     }));
     const planner = mock(async () => ({
-      commands: [{ type: "list_items" as const, category: "pharmacy" as const }],
+      commands: [
+        { type: "list_items" as const, category: "pharmacy" as const },
+      ],
     }));
     const replyGenerator = mock(async () => "Your pharmacy list is empty.");
     const reply = mock(async () => {});
-    const handler = createShoppingHandler(
-      { listItems } as any,
+    const handler = createTestShoppingHandler({
+      repository: { listItems } as any,
       planner,
       replyGenerator,
-    );
+    });
 
     await handler(
       {
@@ -207,11 +216,11 @@ describe("createShoppingHandler", () => {
     }));
     const replyGenerator = mock(async () => "should not be called");
     const reply = mock(async () => {});
-    const handler = createShoppingHandler(
-      { listItems } as any,
+    const handler = createTestShoppingHandler({
+      repository: { listItems } as any,
       planner,
       replyGenerator,
-    );
+    });
 
     await handler(
       {
@@ -249,11 +258,11 @@ describe("createShoppingHandler", () => {
     }));
     const replyGenerator = mock(async () => "should not be called");
     const reply = mock(async () => {});
-    const handler = createShoppingHandler(
-      { addItems } as any,
+    const handler = createTestShoppingHandler({
+      repository: { addItems } as any,
       planner,
       replyGenerator,
-    );
+    });
 
     await handler(
       {
