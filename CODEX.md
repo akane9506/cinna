@@ -56,6 +56,59 @@ The current implementation supports:
 
 Future feature modules should live under `src/modules/{feature_name}`.
 
+## Refactoring Direction
+
+The next development phase should prioritize structure before adding more
+shopping behavior. The current code works, but some responsibilities are packed
+too tightly together. Refactors should make the layers explicit and keep object
+construction out of business logic.
+
+Target layers:
+
+- Runtime composition: creates real infrastructure objects and wires the app.
+  This belongs near the entry point or a small composition module.
+- Transport layer: Telegraf/Hono adapters. This layer extracts request context,
+  sends replies, maps framework errors, and delegates work.
+- Core orchestration layer: coordinates use cases with plain inputs and outputs.
+  It should not know Telegraf, Hono, Firebase document paths, or process startup.
+- Domain/module layer: shopping use cases, command execution, validation, and
+  deterministic business rules.
+- Infrastructure layer: Firestore repositories, Gemini clients, prompt loading,
+  logging adapters, and other external services.
+
+Concrete refactoring goals:
+
+- Split app creation from runtime startup. Importing modules should not launch
+  Telegram polling or initialize services as side effects.
+- Move dependency construction to composition code. Avoid factories with default
+  live dependencies such as `repository = new ShoppingRepository()` embedded in
+  module handlers.
+- Keep handlers thin. A Telegram handler should parse the Telegram context,
+  call an application service/use case, then send returned messages.
+- Keep use cases framework-agnostic. Shopping orchestration should accept plain
+  values such as `userId`, `userText`, and `brainResponse`, and return an
+  explicit result instead of calling `ctx.reply` directly.
+- Keep repositories behind small interfaces owned by the consuming module. Tests
+  should pass fakes or in-memory adapters through composition instead of relying
+  on optional constructor defaults inside production factories.
+- Separate planning, execution, and reply generation. LLM planning should produce
+  validated commands; command execution should produce persisted operation
+  results; reply generation should use those results only after side effects
+  succeed.
+- Prefer named dependency objects over long positional factory parameters. If a
+  constructor or factory needs more than two dependencies, pass a single typed
+  object and make required dependencies explicit.
+- Use narrow, typed result objects for user-facing outcomes. Do not encode flow
+  control through thrown errors when the result is an expected unsupported action,
+  validation failure, or missing user context.
+- Keep module exports intentional. Export public composition/use-case entry
+  points; keep helper functions private unless tests need a stable pure unit.
+
+Refactoring should happen in small vertical slices with tests. For example,
+extract a shopping application service first, adapt the Telegram handler to it,
+then move runtime wiring into composition code. Avoid broad rewrites that change
+architecture and feature behavior at the same time.
+
 ## Development Commands
 
 - `bun install`: Install dependencies.
@@ -84,11 +137,19 @@ bun run lint
    performing side effects.
 5. Treat dispatcher/module boundaries carefully: classification is not the same
    as persistence or action execution.
-6. Do not introduce the deprecated `@google/generative-ai` package. Use
+6. Do not create live services in default function parameters or module-level
+   handler exports. Build production dependencies in composition/runtime code and
+   inject them explicitly.
+7. Do not let framework types leak into use cases. `Context`, Hono request
+   objects, and Firebase document references belong at the adapter or
+   infrastructure boundary.
+8. Keep side-effect order obvious: classify, plan, validate, execute, then reply.
+   Persisted state should be the source for success replies.
+9. Do not introduce the deprecated `@google/generative-ai` package. Use
    `@google/genai`.
-7. Avoid logging raw personal user content in production paths unless there is a
+10. Avoid logging raw personal user content in production paths unless there is a
    clear debugging need and the data is redacted or truncated.
-8. Keep tests close to changed behavior. Add narrow unit tests for core logic and
+11. Keep tests close to changed behavior. Add narrow unit tests for core logic and
    broader tests when changing cross-module flows.
 
 ## Review Notes From Initial Read

@@ -4,7 +4,7 @@ const mockHandleShoppingIntent = mock(async () => {});
 const mockLoggerInfo = mock();
 const mockLoggerError = mock();
 
-mock.module("../modules/shopping/handler", () => ({
+mock.module("../modules/shopping/composition", () => ({
   handleShoppingIntent: mockHandleShoppingIntent,
 }));
 
