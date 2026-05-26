@@ -91,6 +91,31 @@ describe("ShoppingRepository", () => {
     ).toEqual(["bread", "milk", "eggs", "butter"]);
   });
 
+  it("flags listed items older than two weeks as stale", async () => {
+    const store = new InMemoryShoppingListStore();
+    const repository = new ShoppingRepository(store);
+    const now = Date.now();
+    const fifteenDaysAgo = now - 15 * 24 * 60 * 60 * 1000;
+    const thirteenDaysAgo = now - 13 * 24 * 60 * 60 * 1000;
+
+    await store.saveList("user-1", "grocery", {
+      category: "grocery",
+      lastUpdated: now,
+      items: [
+        { name: "old milk", addedAt: fifteenDaysAgo },
+        { name: "fresh eggs", addedAt: thirteenDaysAgo },
+      ],
+    });
+
+    const result = await repository.listItems("user-1", "grocery");
+
+    expect(result.items.map((item) => item.name)).toEqual([
+      "old milk",
+      "fresh eggs",
+    ]);
+    expect(result.staleItems?.map((item) => item.name)).toEqual(["old milk"]);
+  });
+
   it("falls unknown categories back to other", async () => {
     const store = new InMemoryShoppingListStore();
     const repository = new ShoppingRepository(store);

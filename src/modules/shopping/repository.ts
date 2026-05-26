@@ -9,6 +9,8 @@ import {
   ShoppingCategorySchema,
 } from "./types";
 
+const STALE_ITEM_AGE_MS = 14 * 24 * 60 * 60 * 1000;
+
 export interface ShoppingListStore {
   getList(
     userId: string,
@@ -124,10 +126,12 @@ export class ShoppingRepository {
     category?: string,
   ): Promise<ShoppingListItemsResult> {
     const list = await this.loadOrCreateList(userId, category);
+    const staleBefore = Date.now() - STALE_ITEM_AGE_MS;
     return {
       type: "list_items",
       category: list.category,
       items: list.items,
+      staleItems: list.items.filter((item) => item.addedAt < staleBefore),
       changed: false,
     };
   }

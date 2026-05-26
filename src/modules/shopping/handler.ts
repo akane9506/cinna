@@ -10,7 +10,11 @@ import {
   ShoppingReplyInput,
   planShoppingCommands,
 } from "./planner";
-import { ShoppingOperationResult, ShoppingPlannerCommand } from "./types";
+import {
+  SHOPPING_CATEGORIES,
+  ShoppingOperationResult,
+  ShoppingPlannerCommand,
+} from "./types";
 
 type AddItemsCommand = Extract<ShoppingPlannerCommand, { type: "add_items" }>;
 type ListItemsCommand = Extract<ShoppingPlannerCommand, { type: "list_items" }>;
@@ -35,9 +39,34 @@ export const createShoppingHandler = (
       return;
     }
 
+    let existingItemsByCategory;
+    if (brainResponse.action === "add") {
+      try {
+        existingItemsByCategory = await loadExistingItemsByCategory(
+          repository,
+          userId,
+        );
+      } catch (error) {
+        logger.error(
+          { error, userId },
+          "Failed to load shopping items for planning",
+        );
+        await ctx.reply(
+          brainResponse.language === "zh"
+            ? "读取购物清单时出错了，请稍后再试。"
+            : "Sorry, I encountered an error while reading your shopping list.",
+        );
+        return;
+      }
+    }
+
     let commands;
     try {
-      const plan = await planner({ userText, brainResponse });
+      const plan = await planner({
+        userText,
+        brainResponse,
+        existingItemsByCategory,
+      });
       commands = assertSupportedShoppingCommands(plan.commands);
     } catch (error) {
       logger.info(
@@ -93,14 +122,41 @@ export const createShoppingHandler = (
       }
     }
 
-    await ctx.reply(
-      await replyGenerator({
-        userText,
-        language: brainResponse.language,
-        results,
-      }),
-    );
+    try {
+      await ctx.reply(
+        await replyGenerator({
+          userText,
+          language: brainResponse.language,
+          results,
+        }),
+      );
+    } catch (error) {
+      logger.error({ error, userId }, "Failed to generate shopping reply");
+      await ctx.reply(
+        brainResponse.language === "zh"
+          ? "机器人出错了，请稍后再试。"
+          : "Bot error. Please try again later.",
+      );
+    }
   };
+};
+
+const loadExistingItemsByCategory = async (
+  repository: ShoppingRepository,
+  userId: string,
+) => {
+  const listResults = await Promise.all(
+    SHOPPING_CATEGORIES.map((category) =>
+      repository.listItems(userId, category),
+    ),
+  );
+
+  return Object.fromEntries(
+    listResults.map((result) => [
+      result.category,
+      result.items.map((item) => item.name),
+    ]),
+  );
 };
 
 const executeAddItems = async (

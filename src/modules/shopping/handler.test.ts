@@ -1,5 +1,13 @@
 import { describe, expect, it, mock } from "bun:test";
 import { createShoppingHandler } from "./handler";
+import { SHOPPING_CATEGORIES, ShoppingCategory } from "./types";
+
+const listResult = (category: ShoppingCategory, items: string[] = []) => ({
+  type: "list_items" as const,
+  category,
+  changed: false,
+  items: items.map((name, index) => ({ name, addedAt: index + 1 })),
+});
 
 describe("createShoppingHandler", () => {
   it("plans and adds multiple items before replying with persisted details", async () => {
@@ -18,10 +26,14 @@ describe("createShoppingHandler", () => {
         },
       ],
     }));
+    const listItems = mock(
+      async (_userId: string, category: ShoppingCategory) =>
+        listResult(category, category === "grocery" ? ["oat milk"] : []),
+    );
     const replyGenerator = mock(async () => "Saved with persona.");
     const reply = mock(async () => {});
     const handler = createShoppingHandler(
-      { addItems } as any,
+      { addItems, listItems } as any,
       planner,
       replyGenerator,
     );
@@ -40,6 +52,7 @@ describe("createShoppingHandler", () => {
       "add milk and eggs at Costco",
     );
 
+    expect(listItems).toHaveBeenCalledTimes(SHOPPING_CATEGORIES.length);
     expect(planner).toHaveBeenCalledWith({
       userText: "add milk and eggs at Costco",
       brainResponse: {
@@ -47,6 +60,14 @@ describe("createShoppingHandler", () => {
         language: "en",
         reply: "AI reply should not be used.",
         action: "add",
+      },
+      existingItemsByCategory: {
+        grocery: ["oat milk"],
+        pharmacy: [],
+        pet_store: [],
+        toy_shop: [],
+        stationery: [],
+        other: [],
       },
     });
     expect(addItems).toHaveBeenCalledTimes(1);
@@ -162,6 +183,67 @@ describe("createShoppingHandler", () => {
     expect(reply).toHaveBeenCalledWith("Your grocery shopping list has.");
   });
 
+  it("passes stale listed items through the normal list reply", async () => {
+    const listItems = mock(async () => ({
+      type: "list_items" as const,
+      category: "grocery" as const,
+      changed: false,
+      items: [
+        { name: "milk", addedAt: 1 },
+        { name: "eggs", addedAt: 2 },
+      ],
+      staleItems: [{ name: "milk", addedAt: 1 }],
+    }));
+    const planner = mock(async () => ({
+      commands: [{ type: "list_items" as const, category: "grocery" as const }],
+    }));
+    const replyGenerator = mock(
+      async () => "Your grocery shopping list has milk and eggs.",
+    );
+    const reply = mock(async () => {});
+    const handler = createShoppingHandler(
+      { listItems } as any,
+      planner,
+      replyGenerator,
+    );
+
+    await handler(
+      {
+        from: { id: 123 },
+        reply,
+      } as any,
+      {
+        intent: "SHOPPING",
+        language: "en",
+        reply: "AI reply should not be used.",
+        action: "list",
+      },
+      "what is on my grocery list?",
+    );
+
+    expect(replyGenerator).toHaveBeenCalledTimes(1);
+    expect(replyGenerator).toHaveBeenCalledWith({
+      userText: "what is on my grocery list?",
+      language: "en",
+      results: [
+        {
+          type: "list_items",
+          category: "grocery",
+          changed: false,
+          items: [
+            { name: "milk", addedAt: 1 },
+            { name: "eggs", addedAt: 2 },
+          ],
+          staleItems: [{ name: "milk", addedAt: 1 }],
+        },
+      ],
+    });
+    expect(reply).toHaveBeenCalledTimes(1);
+    expect(reply).toHaveBeenCalledWith(
+      "Your grocery shopping list has milk and eggs.",
+    );
+  });
+
   it("replies with an empty list result", async () => {
     const listItems = mock(async () => ({
       type: "list_items" as const,
@@ -170,7 +252,9 @@ describe("createShoppingHandler", () => {
       items: [],
     }));
     const planner = mock(async () => ({
-      commands: [{ type: "list_items" as const, category: "pharmacy" as const }],
+      commands: [
+        { type: "list_items" as const, category: "pharmacy" as const },
+      ],
     }));
     const replyGenerator = mock(async () => "Your pharmacy list is empty.");
     const reply = mock(async () => {});
@@ -234,8 +318,8 @@ describe("createShoppingHandler", () => {
     );
   });
 
-  it("replies with a save error when persistence fails", async () => {
-    const addItems = mock(async () => {
+  it("replies with a read error when loading existing items for add planning fails", async () => {
+    const listItems = mock(async () => {
       throw new Error("database unavailable");
     });
     const planner = mock(async () => ({
@@ -250,7 +334,91 @@ describe("createShoppingHandler", () => {
     const replyGenerator = mock(async () => "should not be called");
     const reply = mock(async () => {});
     const handler = createShoppingHandler(
-      { addItems } as any,
+      { listItems } as any,
+      planner,
+      replyGenerator,
+    );
+
+    await handler(
+      {
+        from: { id: 123 },
+        reply,
+      } as any,
+      {
+        intent: "SHOPPING",
+        language: "en",
+        reply: "AI reply should not be used.",
+        action: "add",
+      },
+      "add milk",
+    );
+
+    expect(planner).not.toHaveBeenCalled();
+    expect(replyGenerator).not.toHaveBeenCalled();
+    expect(reply).toHaveBeenCalledWith(
+      "Sorry, I encountered an error while reading your shopping list.",
+    );
+  });
+
+  it("logs and replies with bot error when final reply generation fails", async () => {
+    const listItems = mock(async () => ({
+      type: "list_items" as const,
+      category: "grocery" as const,
+      changed: false,
+      items: [{ name: "milk", addedAt: 1 }],
+    }));
+    const planner = mock(async () => ({
+      commands: [{ type: "list_items" as const, category: "grocery" as const }],
+    }));
+    const replyGenerator = mock(async () => {
+      throw new Error("invalid model reply");
+    });
+    const reply = mock(async () => {});
+    const handler = createShoppingHandler(
+      { listItems } as any,
+      planner,
+      replyGenerator,
+    );
+
+    await handler(
+      {
+        from: { id: 123 },
+        reply,
+      } as any,
+      {
+        intent: "SHOPPING",
+        language: "en",
+        reply: "AI reply should not be used.",
+        action: "list",
+      },
+      "what is on my grocery list?",
+    );
+
+    expect(replyGenerator).toHaveBeenCalledTimes(1);
+    expect(reply).toHaveBeenCalledWith("Bot error. Please try again later.");
+  });
+
+  it("replies with a save error when persistence fails", async () => {
+    const addItems = mock(async () => {
+      throw new Error("database unavailable");
+    });
+    const listItems = mock(
+      async (_userId: string, category: ShoppingCategory) =>
+        listResult(category),
+    );
+    const planner = mock(async () => ({
+      commands: [
+        {
+          type: "add_items" as const,
+          itemNames: ["milk"],
+          category: "grocery" as const,
+        },
+      ],
+    }));
+    const replyGenerator = mock(async () => "should not be called");
+    const reply = mock(async () => {});
+    const handler = createShoppingHandler(
+      { addItems, listItems } as any,
       planner,
       replyGenerator,
     );

@@ -6,6 +6,8 @@
 - 如果用户一次提到多个商品，请按类别合并成 `add_items` 命令，并把商品放入 `itemNames`。
 - `itemNames` 中的每个商品名都必须保留数量、规格、备注等完整信息，包括英文翻译。
 - 只能把具体可购买商品写入 `itemNames`，例如“五花肉(pork belly)”“黄油(butter)”“迷迭香(rosemary)”。
+- 输入可能包含 `existingItemsByCategory`，这是用户当前每个类别的清单。处理添加请求时，先和目标类别里的现有商品比较；如果新商品和现有商品语义相同、只是中英文翻译略有不同、大小写不同、括号翻译不同、或描述顺序不同，不要再生成这个重复商品。
+- 如果添加请求里的所有商品都已经存在，请返回对应类别的 `list_items` 命令，不要生成重复的 `add_items`。
 - 不要把菜名、料理名、任务名或概括词当成商品写入清单，例如“红烧肉食材(pork belly for braised pork)”“烤牛排食材(steak for grilling)”“牛排(beef steak)”。
 - 如果用户是在问某道菜需要哪些食材、怎么做、要准备什么，不要生成 `add_items`。
 - `category` 是主要存储分组，只能使用 `grocery`、`pharmacy`、`pet_store`、`toy_shop`、`stationery`、`other`。

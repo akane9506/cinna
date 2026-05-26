@@ -1,4 +1,4 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it, mock } from "bun:test";
 import { BrainResponse } from "../../core/types";
 import {
   assertAddItemsCommands,
@@ -7,6 +7,14 @@ import {
   createShoppingReplyGenerator,
   formatShoppingReply,
 } from "./planner";
+
+const firstGeneratedPrompt = (generateContent: any): string => {
+  const request = generateContent.mock.calls[0]?.[0] as
+    | { contents: [{ parts: [{ text: string }] }] }
+    | undefined;
+  expect(request).toBeDefined();
+  return request?.contents[0]?.parts[0]?.text ?? "";
+};
 
 describe("createShoppingPlanner", () => {
   it("plans an add_items command from structured LLM output", async () => {
@@ -42,6 +50,40 @@ describe("createShoppingPlanner", () => {
         },
       ],
     });
+  });
+
+  it("passes existing list items into the planner prompt", async () => {
+    const generateContent = mock(async () => ({
+      text: JSON.stringify({
+        commands: [
+          {
+            type: "add_items",
+            itemNames: ["eggs"],
+            category: "grocery",
+          },
+        ],
+      }),
+    }));
+    const planner = createShoppingPlanner(generateContent);
+
+    await planner({
+      userText: "add milk and eggs",
+      brainResponse: {
+        intent: "SHOPPING",
+        language: "en",
+        reply: "Added.",
+        action: "add",
+      },
+      existingItemsByCategory: {
+        grocery: ["whole milk(milk)"],
+        pharmacy: ["vitamin D"],
+      },
+    });
+
+    const prompt = firstGeneratedPrompt(generateContent);
+    expect(prompt).toContain('"existingItemsByCategory"');
+    expect(prompt).toContain('"grocery":["whole milk(milk)"]');
+    expect(prompt).toContain('"pharmacy":["vitamin D"]');
   });
 
   it("plans a list_items command from structured LLM output", async () => {
@@ -200,8 +242,14 @@ describe("shopping planner instruction", () => {
     ).text();
 
     expect(prompt).toContain("只能把具体可购买商品写入 `itemNames`");
-    expect(prompt).toContain("不要把菜名、料理名、任务名或概括词当成商品写入清单");
-    expect(prompt).toContain("如果用户是在问某道菜需要哪些食材、怎么做、要准备什么");
+    expect(prompt).toContain(
+      "不要把菜名、料理名、任务名或概括词当成商品写入清单",
+    );
+    expect(prompt).toContain(
+      "如果用户是在问某道菜需要哪些食材、怎么做、要准备什么",
+    );
+    expect(prompt).toContain("existingItemsByCategory");
+    expect(prompt).toContain("语义相同、只是中英文翻译略有不同");
   });
 });
 
@@ -275,7 +323,9 @@ describe("assertSupportedShoppingCommands", () => {
       assertSupportedShoppingCommands([
         { type: "remove_items", itemNames: ["milk"], category: "grocery" },
       ]),
-    ).toThrow("Only shopping add_items and list_items are supported right now.");
+    ).toThrow(
+      "Only shopping add_items and list_items are supported right now.",
+    );
   });
 });
 
@@ -372,10 +422,13 @@ describe("createShoppingReplyGenerator", () => {
     ).resolves.toBe("好哒～牛奶和鸡蛋都存好啦 (u･ω･u)");
   });
 
-  it("formats list replies without using generated prose", async () => {
-    const replyGenerator = createShoppingReplyGenerator(async () => {
-      throw new Error("LLM should not be called for list replies");
-    });
+  it("generates list replies with persisted items", async () => {
+    const generateContent = mock(async () => ({
+      text: JSON.stringify({
+        reply: "Your grocery list has milk.",
+      }),
+    }));
+    const replyGenerator = createShoppingReplyGenerator(generateContent);
 
     await expect(
       replyGenerator({
@@ -390,10 +443,48 @@ describe("createShoppingReplyGenerator", () => {
           },
         ],
       }),
-    ).resolves.toBe("Your grocery shopping list has:\n- milk");
+    ).resolves.toBe("Your grocery list has milk.");
+
+    expect(generateContent).toHaveBeenCalledTimes(1);
+    const prompt = firstGeneratedPrompt(generateContent);
+    expect(prompt).toContain('"type":"list_items"');
+    expect(prompt).toContain('"items":["milk"]');
   });
 
-  it("falls back to deterministic formatting when final reply output is invalid", async () => {
+  it("generates list replies with stale item facts", async () => {
+    const generateContent = mock(async () => ({
+      text: JSON.stringify({
+        reply: "Your grocery list has milk and eggs.",
+      }),
+    }));
+    const replyGenerator = createShoppingReplyGenerator(generateContent);
+
+    await expect(
+      replyGenerator({
+        userText: "show my grocery list",
+        language: "en",
+        results: [
+          {
+            type: "list_items",
+            category: "grocery",
+            changed: false,
+            items: [
+              { name: "milk", addedAt: 1 },
+              { name: "eggs", addedAt: 2 },
+            ],
+            staleItems: [{ name: "milk", addedAt: 1 }],
+          },
+        ],
+      }),
+    ).resolves.toBe("Your grocery list has milk and eggs.");
+
+    expect(generateContent).toHaveBeenCalledTimes(1);
+    const prompt = firstGeneratedPrompt(generateContent);
+    expect(prompt).toContain('"items":["milk","eggs"]');
+    expect(prompt).toContain('"staleItems":["milk"]');
+  });
+
+  it("throws when final reply output is invalid", async () => {
     const replyGenerator = createShoppingReplyGenerator(async () => ({
       text: "{}",
     }));
@@ -411,8 +502,6 @@ describe("createShoppingReplyGenerator", () => {
           },
         ],
       }),
-    ).resolves.toBe(
-      "Done～ I added milk to your grocery shopping list. (u･ω･u)",
-    );
+    ).rejects.toThrow("Failed to generate shopping reply");
   });
 });

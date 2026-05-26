@@ -6,6 +6,7 @@ import { logger } from "../../core/logger";
 import { getPersona } from "../../core/persona";
 import { BrainResponse } from "../../core/types";
 import {
+  ShoppingCategory,
   ShoppingOperationResult,
   ShoppingPlannerCommand,
   ShoppingPlannerCommandSchema,
@@ -24,6 +25,7 @@ export type ShoppingPlannerOutput = z.infer<typeof ShoppingPlannerOutputSchema>;
 export type ShoppingPlannerInput = {
   userText: string;
   brainResponse: BrainResponse;
+  existingItemsByCategory?: Partial<Record<ShoppingCategory, string[]>>;
 };
 
 export type ShoppingReplyInput = {
@@ -90,6 +92,7 @@ const getShoppingReplyInstruction = (): Promise<string> =>
 const buildPlannerPrompt = ({
   userText,
   brainResponse,
+  existingItemsByCategory,
 }: ShoppingPlannerInput): string =>
   JSON.stringify({
     userText,
@@ -97,6 +100,7 @@ const buildPlannerPrompt = ({
     routedAction: brainResponse.action,
     routedItem: brainResponse.item,
     language: brainResponse.language,
+    existingItemsByCategory,
   });
 
 export const createShoppingPlanner = (
@@ -151,6 +155,12 @@ const buildReplyPrompt = ({
       type: result.type,
       category: result.category,
       itemNames: "itemNames" in result ? result.itemNames : undefined,
+      items:
+        "items" in result ? result.items.map((item) => item.name) : undefined,
+      staleItems:
+        "staleItems" in result
+          ? (result.staleItems ?? []).map((item) => item.name)
+          : undefined,
       changed: result.changed,
     })),
   });
@@ -160,10 +170,6 @@ export const createShoppingReplyGenerator = (
     client.models.generateContent(request),
 ) => {
   return async (input: ShoppingReplyInput): Promise<string> => {
-    if (input.results.some((result) => result.type === "list_items")) {
-      return formatShoppingReply(input.results, input.language);
-    }
-
     const persona = await getPersona();
     const replyInstruction = await getShoppingReplyInstruction();
     const response = await generateContent({
@@ -189,7 +195,7 @@ export const createShoppingReplyGenerator = (
         { error, responseText },
         "Shopping reply schema validation failed",
       );
-      return formatShoppingReply(input.results, input.language);
+      throw new Error("Failed to generate shopping reply", { cause: error });
     }
   };
 };
@@ -212,8 +218,7 @@ export const assertSupportedShoppingCommands = (
   commands: ShoppingPlannerCommand[],
 ): SupportedShoppingPlannerCommand[] => {
   const unsupportedCommand = commands.find(
-    (command) =>
-      command.type !== "add_items" && command.type !== "list_items",
+    (command) => command.type !== "add_items" && command.type !== "list_items",
   );
   if (unsupportedCommand) {
     throw new Error(

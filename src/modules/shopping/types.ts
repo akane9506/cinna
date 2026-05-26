@@ -2,13 +2,22 @@ import { z } from "zod";
 
 export const ShoppingTimestampMillisSchema = z.number().int().nonnegative();
 
+export const SHOPPING_CATEGORIES = [
+  "grocery",
+  "pharmacy",
+  "pet_store",
+  "toy_shop",
+  "stationery",
+  "other",
+] as const;
+
 export const ShoppingItemSchema = z.object({
   name: z.string().trim().min(1),
   addedAt: ShoppingTimestampMillisSchema,
 });
 
 export const ShoppingCategorySchema = z
-  .enum(["grocery", "pharmacy", "pet_store", "toy_shop", "stationery", "other"])
+  .enum(SHOPPING_CATEGORIES)
   .catch("other");
 
 export const ShoppingListDocSchema = z.object({
@@ -72,6 +81,7 @@ export const ShoppingOperationResultSchema = z.discriminatedUnion("type", [
   ShoppingOperationResultBaseSchema.extend({
     type: z.literal("list_items"),
     items: z.array(ShoppingItemSchema),
+    staleItems: z.array(ShoppingItemSchema).optional(),
   }),
   ShoppingOperationResultBaseSchema.extend({
     type: z.literal("clear_list"),
