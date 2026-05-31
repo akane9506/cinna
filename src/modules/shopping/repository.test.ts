@@ -61,6 +61,7 @@ describe("ShoppingRepository", () => {
       itemNames: ["milk"],
     });
     expect(listResult.items.map((item) => item.name)).toEqual(["milk"]);
+    expect(listResult.staledItems).toEqual([]);
     expect(Number.isInteger(listResult.items[0].addedAt)).toBe(true);
     expect(listResult.items[0].addedAt).toBeGreaterThan(0);
     expect(store.lists.get("user-1/grocery")?.lastUpdated).toEqual(
@@ -89,6 +90,35 @@ describe("ShoppingRepository", () => {
         (item) => item.name,
       ),
     ).toEqual(["bread", "milk", "eggs", "butter"]);
+  });
+
+  it("stores items older than two weeks in the staled items field when listing", async () => {
+    const store = new InMemoryShoppingListStore();
+    const repository = new ShoppingRepository(store);
+    const now = Date.now();
+    const fifteenDaysAgo = now - 15 * 24 * 60 * 60 * 1000;
+    const thirteenDaysAgo = now - 13 * 24 * 60 * 60 * 1000;
+
+    store.lists.set("user-1/grocery", {
+      category: "grocery",
+      lastUpdated: now,
+      items: [
+        { name: "old milk", addedAt: fifteenDaysAgo },
+        { name: "fresh eggs", addedAt: now },
+        { name: "recent bread", addedAt: thirteenDaysAgo },
+      ],
+    });
+
+    const result = await repository.listItems("user-1", "grocery");
+
+    expect(result.items.map((item) => item.name)).toEqual([
+      "old milk",
+      "fresh eggs",
+      "recent bread",
+    ]);
+    expect(result.staledItems).toEqual([
+      { name: "old milk", addedAt: fifteenDaysAgo },
+    ]);
   });
 
   it("falls unknown categories back to other", async () => {

@@ -73,6 +73,8 @@ type ShoppingClearListResult = Extract<
   { type: "clear_list" }
 >;
 
+const STALE_ITEM_AGE_MS = 14 * 24 * 60 * 60 * 1000;
+
 export class ShoppingRepository {
   constructor(
     private readonly store: ShoppingListStore = createFirestoreShoppingListStore(),
@@ -124,10 +126,12 @@ export class ShoppingRepository {
     category?: string,
   ): Promise<ShoppingListItemsResult> {
     const list = await this.loadOrCreateList(userId, category);
+    const now = Date.now();
     return {
       type: "list_items",
       category: list.category,
       items: list.items,
+      staledItems: this.findStaledItems(list.items, now),
       changed: false,
     };
   }
@@ -304,5 +308,9 @@ export class ShoppingRepository {
   private itemNameMatches(item: ShoppingItem, itemName: string): boolean {
     const normalizedName = itemName.trim().toLowerCase();
     return item.name.trim().toLowerCase() === normalizedName;
+  }
+
+  private findStaledItems(items: ShoppingItem[], now: number): ShoppingItem[] {
+    return items.filter((item) => now - item.addedAt > STALE_ITEM_AGE_MS);
   }
 }

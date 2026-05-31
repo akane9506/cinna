@@ -200,6 +200,10 @@ describe("shopping planner instruction", () => {
     ).text();
 
     expect(prompt).toContain("只能把具体可购买商品写入 `itemNames`");
+    expect(prompt).toContain("用户输入语言的商品名(英语商品名)");
+    expect(prompt).toContain("花园玫瑰(garden rose)");
+    expect(prompt).toContain("用户输入语言商品名和英语商品名相同，只写一次");
+    expect(prompt).toContain("不要写成“garden rose(garden rose)”");
     expect(prompt).toContain("不要把菜名、料理名、任务名或概括词当成商品写入清单");
     expect(prompt).toContain("如果用户是在问某道菜需要哪些食材、怎么做、要准备什么");
   });
@@ -324,6 +328,7 @@ describe("formatShoppingReply", () => {
               { name: "milk", addedAt: 1 },
               { name: "eggs", addedAt: 2 },
             ],
+            staledItems: [],
           },
         ],
         "en",
@@ -340,6 +345,7 @@ describe("formatShoppingReply", () => {
             category: "pharmacy",
             changed: false,
             items: [],
+            staledItems: [],
           },
         ],
         "en",
@@ -372,9 +378,16 @@ describe("createShoppingReplyGenerator", () => {
     ).resolves.toBe("好哒～牛奶和鸡蛋都存好啦 (u･ω･u)");
   });
 
-  it("formats list replies without using generated prose", async () => {
-    const replyGenerator = createShoppingReplyGenerator(async () => {
-      throw new Error("LLM should not be called for list replies");
+  it("generates list replies from persisted results", async () => {
+    const replyGenerator = createShoppingReplyGenerator(async (request) => {
+      const promptText = request.contents[0]?.parts?.[0]?.text ?? "";
+      expect(promptText).toContain('"items"');
+      expect(promptText).toContain('"milk"');
+      return {
+        text: JSON.stringify({
+          reply: "Your grocery list has milk.",
+        }),
+      };
     });
 
     await expect(
@@ -387,6 +400,29 @@ describe("createShoppingReplyGenerator", () => {
             category: "grocery",
             changed: false,
             items: [{ name: "milk", addedAt: 1 }],
+            staledItems: [],
+          },
+        ],
+      }),
+    ).resolves.toBe("Your grocery list has milk.");
+  });
+
+  it("falls back to deterministic formatting when list reply output is invalid", async () => {
+    const replyGenerator = createShoppingReplyGenerator(async () => ({
+      text: "{}",
+    }));
+
+    await expect(
+      replyGenerator({
+        userText: "show my grocery list",
+        language: "en",
+        results: [
+          {
+            type: "list_items",
+            category: "grocery",
+            changed: false,
+            items: [{ name: "milk", addedAt: 1 }],
+            staledItems: [],
           },
         ],
       }),
