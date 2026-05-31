@@ -72,6 +72,7 @@ export const ShoppingOperationResultSchema = z.discriminatedUnion("type", [
   ShoppingOperationResultBaseSchema.extend({
     type: z.literal("list_items"),
     items: z.array(ShoppingItemSchema),
+    staledItems: z.array(ShoppingItemSchema),
   }),
   ShoppingOperationResultBaseSchema.extend({
     type: z.literal("clear_list"),

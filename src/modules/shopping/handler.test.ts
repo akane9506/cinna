@@ -124,6 +124,7 @@ describe("createShoppingHandler", () => {
         { name: "milk", addedAt: 1 },
         { name: "eggs", addedAt: 2 },
       ],
+      staledItems: [],
     }));
     const planner = mock(async () => ({
       commands: [{ type: "list_items" as const, category: "grocery" as const }],
@@ -163,6 +164,7 @@ describe("createShoppingHandler", () => {
             { name: "milk", addedAt: 1 },
             { name: "eggs", addedAt: 2 },
           ],
+          staledItems: [],
         },
       ],
     });
@@ -175,6 +177,7 @@ describe("createShoppingHandler", () => {
       category: "pharmacy" as const,
       changed: false,
       items: [],
+      staledItems: [],
     }));
     const planner = mock(async () => ({
       commands: [

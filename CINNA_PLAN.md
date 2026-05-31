@@ -192,8 +192,10 @@ The goal of this phase is to finish the persistent shopping-list function end to
   - _Verification:_ [x] Planner/schema/repository tests cover category normalization, `stationery`, and unknown category fallback to `other`.
 - **Step 3.3.2: End-to-End `list_items` Slice**
   - Extend the planner, handler, dispatcher tests, and replies for `list_items`.
-  - List replies must be built from Firestore results, not Gemini-generated prose.
-  - _Verification:_ [x] Unit tests cover `list_items` planning/execution/reply behavior for empty and non-empty lists.
+  - List replies must be grounded in Firestore results. The reply generator may use Gemini for final wording, but the prompt must include persisted `items` and `staledItems`, and deterministic formatting remains the fallback if reply generation fails.
+  - Retrieved list results include a `staledItems` field containing items whose `addedAt` timestamp is more than two weeks old. Stale items are surfaced for reply generation but are not deleted automatically.
+  - Planner item names are normalized before persistence as `user input language item name(English item name)`. If both names are the same, write the item once without duplicate parentheses.
+  - _Verification:_ [x] Unit tests cover `list_items` planning/execution/reply behavior for empty and non-empty lists, LLM reply prompt grounding, deterministic fallback, stale item detection, and item-name prompt rules.
   - _Verification:_ [ ] Manual Telegram test lists the item added in Step 3.3.1 from the configured development Firestore database.
 - **Step 3.3.3: End-to-End `remove_items` Slice**
   - Extend the same path for `remove_items`.
