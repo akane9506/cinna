@@ -1,257 +1,263 @@
-# Cinna: Implementation Roadmap
+# Cinna Rebuild Plan
 
-Cinna is a modular, AI-powered Telegram assistant designed to handle voice and text inputs for various tasks, starting with shopping-list management. Powered by **Gemini 3 Flash**, it leverages frontier reasoning and agentic capabilities for seamless interaction.
+## Decision Record
 
-## 1. Modular Architecture
+This is a greenfield rebuild.
 
-The system follows a "Brain & Modules" pattern:
+- No data migration from Firestore.
+- No code migration from TypeScript.
+- No backward-compatible API or schema.
+- Existing prompts are retained as product assets.
+- PostgreSQL is the only system of record.
+- Eino is used for model integration and orchestration, not domain persistence.
 
-- **Core Brain (Gemini 3 Flash):** Acts as the intent router and transcription engine, utilizing its pro-grade reasoning to handle complex requests.
-- **Feature Modules:** Independent logic for specific tasks (Shopping, Reminders, etc.).
-- **Domain Planners:** Module-specific LLM services convert conversational intent into validated, storage-safe commands. For shopping lists, the planner should produce DB operations such as `add_items`, `remove_items`, `update_items`, `list_items`, and `clear_list`.
-- **Persistence Layer:** Firestore repositories own reads/writes and keep storage details out of the dispatcher and LLM prompts.
-- **Response Engine:** Ensures responses match the user's input language and are grounded in actual operation results when persistence is involved.
-
-### Shopping Dispatch Architecture
-
-Shopping requests use a staged LLM pipeline:
-
-```text
-Telegram message
-  -> Core Brain
-     - classify intent as SHOPPING / FEEDBACK / OTHER
-     - detect language
-     - preserve conversational context
-  -> Dispatcher
-     - route SHOPPING only
-     - do not write chat content directly to Firestore
-  -> Shopping Handler
-     - load current list state when needed
-     - call Shopping Planner
-  -> Shopping Planner
-     - run a second structured LLM pass
-     - convert user text + BrainResponse + current state into strict DB commands
-     - split multi-item requests into category-specific commands
-  -> Shopping Handler / Repository
-     - validate and execute Firestore operations
-  -> Reply
-     - generate persona reply from actual DB results after persistence succeeds
-     - use deterministic fallback if reply generation fails validation
-```
-
-The core rule is: **the Brain routes; the Shopping Planner plans DB operations; the Repository persists.** Gemini-generated chat text must not be treated as the source of truth for Firestore writes.
-
-### Project Structure
+## Target Structure
 
 ```text
 cinna/
-├── .github/workflows/
-│   ├── ci.yml                # CI: Lint, Test
-│   └── cd.yml                # CD: Deploy to Cloud Run
-├── src/
+├── cmd/
+│   └── cinna/
+│       └── main.go
+├── internal/
+│   ├── app/
+│   │   ├── app.go
+│   │   └── dependencies.go
+│   ├── agent/
+│   │   ├── model.go
+│   │   ├── router.go
+│   │   └── callbacks.go
+│   ├── conversation/
+│   │   ├── domain.go
+│   │   ├── service.go
+│   │   └── repository.go
+│   ├── shopping/
+│   │   ├── domain.go
+│   │   ├── service.go
+│   │   ├── repository.go
+│   │   ├── planner.go
+│   │   └── workflow.go
+│   ├── platform/
+│   │   ├── postgres/
+│   │   │   ├── db.go
+│   │   │   └── repositories.go
+│   │   └── telegram/
+│   │       ├── bot.go
+│   │       ├── handler.go
+│   │       └── update.go
+│   └── observability/
+│       ├── logging.go
+│       └── tracing.go
+├── db/
+│   ├── migrations/
+│   ├── queries/
+│   └── sqlc.yaml
+├── prompts/
 │   ├── core/
-│   │   ├── bot.ts            # Telegraf setup
-│   │   ├── brain.ts          # Gemini & Function Calling
-│   │   └── config.ts         # Env validation (Zod)
-│   ├── modules/
-│   │   └── shopping/         # Shopping module logic
-│   │       ├── handler.ts
-│   │       ├── planner.ts
-│   │       ├── repository.ts
-│   │       ├── types.ts
-│   │       └── prompts/
-│   ├── services/
-│   │   └── audio.ts          # Telegram voice downloader
-│   ├── index.ts              # Entry point (Bun + Hono)
-│   └── types.ts              # Global types
-├── .env                      # Local secrets
-├── .gitignore
-├── Dockerfile                # For GCP Cloud Run
-├── package.json
-├── tsconfig.json
+│   │   └── persona.md
+│   └── shopping/
+│       ├── planner.instruction.md
+│       └── reply.instruction.md
+├── tests/
+│   └── integration/
+├── deployments/
+│   ├── Dockerfile
+│   └── compose.yaml
+├── .env.example
+├── go.mod
+├── Makefile
 └── README.md
 ```
 
-## 2. Exhaustive Dependency List
+Directories should be created when their first real file is needed. Do not add
+empty packages to make the tree look complete.
 
-### Production Dependencies
+## Phase 0: Bootstrap
 
-- **`telegraf`**: Modern Telegram Bot Framework.
-- **`@google/genai`**: Google's official unified SDK for Gemini 2.0+.
-- **`zod`**: TypeScript-first schema validation for environment variables.
-- **`hono`**: Ultrafast web framework for the edge and Cloud Run.
-- **`firebase-admin`**: Firebase Admin SDK for Firestore persistence.
-- **`fetch`**: Built-in Bun API to download voice files from Telegram's file server.
+Goal: a boring, testable Go service that starts and shuts down cleanly.
 
-### Development Dependencies
+- Initialize the Go module.
+- Pin Eino and provider integrations to explicit versions.
+- Add configuration parsing with strict validation.
+- Add structured logging with `log/slog`.
+- Add `/healthz` and `/readyz`.
+- Add graceful shutdown.
+- Add `Makefile`, Dockerfile, and local PostgreSQL Compose service.
+- Add CI for formatting, tests, vet, and lint.
 
-- **`typescript`**: Static typing for the codebase.
-- **`@types/bun`**: Type definitions for Bun.
-- **`bun:test`**: Built-in Bun testing framework.
-- **`eslint`**: Linter to maintain code quality, with TypeScript support.
+Exit criteria:
 
----
+- `go test ./...` passes.
+- The service starts without Telegram or model credentials in test mode.
+- Health endpoints work.
+- PostgreSQL readiness is observable.
 
-## 3. CI/CD Strategy (GitHub Actions)
+## Phase 1: PostgreSQL Foundation
 
-### CI (Continuous Integration)
+Goal: establish the persistence boundary before adding agent behavior.
 
-Triggered on every pull request and push to `main`.
+- Add `pgxpool`.
+- Add `goose` migrations.
+- Add `sqlc` query generation.
+- Create `users`, `shopping_items`, and `feedback` tables.
+- Use UUID or generated numeric identifiers consistently.
+- Store timestamps as `TIMESTAMPTZ`.
+- Enforce active-item uniqueness at the database level.
+- Add repository integration tests against real PostgreSQL.
 
-- **Lint:** Run `eslint` to ensure style consistency.
-- **Test:** Run `bun test` to ensure no regressions.
+Initial shopping item fields:
 
-### CD (Continuous Deployment)
+```text
+id
+user_id
+name
+normalized_name
+category
+quantity
+unit
+note
+completed_at
+created_at
+updated_at
+```
 
-Triggered on merge to `main` or specific tags.
+Do not add vector columns, Redis, event buses, or audit tables in this phase.
 
-- **Build & Push:** Build Docker image and push to Google Artifact Registry.
-- **Deploy:** Deploy the new image to GCP Cloud Run.
+Exit criteria:
 
----
+- Migrations apply to an empty database.
+- Repository tests cover add, list, rename, complete/remove, and clear.
+- Transactions enforce deterministic shopping behavior.
 
-## 5. Personality & Memory Strategy
+## Phase 2: Shopping Application Slice
 
-### Personality (The "Cinna" Vibe)
+Goal: complete shopping behavior without an LLM or Telegram dependency.
 
-- **System Instruction:** All calls to Gemini will include a dedicated `systemInstruction` to define Cinna's persona.
-- **Traits:** Helpful, efficient, slightly witty, and context-aware.
-- **Language Parity:** Cinna must respond in the same language detected in the user's input.
+- Define shopping commands and operation results.
+- Implement category validation.
+- Implement item normalization behind an interface.
+- Implement add, list, update, remove, and clear services.
+- Treat expected outcomes as typed results, not generic errors.
+- Generate deterministic fallback replies.
 
-### Memory Implementation
+Exit criteria:
 
-1. **Short-Term (Conversation Thread):**
-   - Use an in-memory `Map` (keyed by `chatId`) with an LRU eviction strategy to store the last 10-20 turns.
-   - Pass this history to the Gemini API call.
-2. **Long-Term (User Data & Feedback):**
-   - Implement "Agentic Memory" via Function Calling.
-   - _Storage:_ **Firestore** will be used to persist shopping lists, user preferences, and bot improvement feedback (bugs/suggestions).
-   - Cinna will have a dedicated tool to `record_bot_feedback(category, detail)` where `category` is 'bug' or 'improvement'.
+- Domain and service tests cover all operations.
+- A command-line or test harness can exercise the full shopping lifecycle.
+- No framework types appear in the shopping package.
 
----
+## Phase 3: Eino Integration
 
-## 6. Granular Implementation Roadmap
+Goal: convert natural language into validated application commands.
 
-### Phase 1: Infrastructure & Basic Connectivity
+- Configure the selected chat model through an Eino component.
+- Load prompts from embedded files under `prompts/`.
+- Split persona/routing concerns from shopping planning concerns.
+- Build a deterministic Eino graph:
 
-- **Step 1.1: Project Initialization**
-  - Initialize `bun`, install `telegraf`, `hono`, `typescript`, `zod`.
-  - _Verification:_ [x] `bun test` succeeds.
-- **Step 1.2: CI/CD Setup**
-  - Create `.github/workflows/ci.yml` using `oven-sh/setup-bun`.
-  - _Verification:_ [x] Push to GitHub and see the green checkmark on the commit.
-- **Step 1.3: Basic Bot "Heartbeat"**
-  - Create `src/index.ts` with a simple Telegraf handler and Hono health check.
-  - _Verification:_
-    - [x] Manual: Send text to bot, get reply.
-    - [x] Test: Unit test the message handler logic using `bun:test`.
-- **Step 1.4: Audio Reception Verification**
-  - Update bot to handle `voice` updates.
-  - _Verification:_
-    - [x] Manual: Send voice note, bot replies "Voice received".
+```text
+input
+  -> classify
+  -> route
+  -> shopping plan
+  -> schema validation
+  -> shopping service
+  -> grounded reply
+```
 
-### Phase 2: Core Brain (Gemini Integration)
+- Add callbacks for latency, token use, failures, and trace correlation.
+- Use fake Eino components in workflow tests.
+- Reject invalid, unsupported, or ambiguous commands before side effects.
 
-- **Step 2.1: Simple Gemini Text Completion**
-  - Integration with `@google/genai`.
-  - Wire up `src/core/bot.ts` to use Gemini for text replies.
-  - _Verification:_ [x] Unit tests for brain.ts pass.
-- **Step 2.2: Text Intent Routing & Memory**
-  - Implement `Brain` service for structured intent classification (JSON output).
-  - Integrate `systemInstruction` for personality.
-  - Implement basic in-memory session tracking for short-term context.
-  - _Verification:_ [x] Unit tests with various intents and mocked Gemini output pass.
+Prompt refactor rule:
 
-### Phase 3: Shopping MVP Persistence (Firestore)
+- Preserve the original prompt files.
+- Introduce revised versions only through explicit prompt changes.
+- Separate persona text from machine-output contracts over time.
+- Add prompt fixtures/evaluations before materially changing behavior.
 
-The goal of this phase is to finish the persistent shopping-list function end to end. Once shopping add/list/update/remove/clear works locally with Firestore and tests, the project should move directly to getting the bot online instead of waiting for audio, feedback, or broader language polish.
+Exit criteria:
 
-- **Step 3.1: Firebase Initialization**
-  - Install `firebase-admin` and configure credentials.
-  - Add a Firestore initialization module that can be mocked in tests.
-  - _Verification:_ [x] `firebase-admin` initializes via explicit project/database config and repository tests use a mocked store.
-- **Step 3.2: Shopping Domain Model & Firestore Repository**
-  - Implement `src/modules/shopping/types.ts` with Zod schemas for shopping items, planner commands, and operation results.
-  - Implement a Firestore repository that stores active shopping items under user-scoped category lists.
-  - Recommended document shape:
-    ```text
-    users/{telegramUserId}/shoppingLists/{category}
-    ```
-  - Store `category`, an `items` array, and `lastUpdated` as epoch milliseconds; each item should contain `name` and `addedAt` as epoch milliseconds.
-  - _Verification:_ [x] Repository unit tests cover add, list, update, remove, and clear using a mocked Firestore adapter.
-- **Step 3.3.1: End-to-End `add_items` Slice**
-  - Implement only enough planner, handler, dispatcher wiring, and reply formatting for `add_items`.
-  - The full path must be: Telegram text -> core Brain routes `SHOPPING` -> shopping planner returns validated `add_items` -> handler groups items by normalized category -> repository writes the grouped batch -> Firestore is updated -> bot replies from the repository results.
-  - Keep unsupported shopping actions explicitly unimplemented or safely rejected in this slice.
-  - _Verification:_ [x] Unit tests cover `add_items` planner parsing, command execution, reply formatting, handler orchestration, and dispatcher routing.
-  - _Verification:_ [ ] Manual Telegram test adds one item to the configured development Firestore database and the bot replies with the persisted item/category.
-- **Step 3.3.1a: Replace Free-Form Store Text with List Category**
-  - Free-form store/place text is not reliable enough as a grouping or display field. Replace it with a broader planner-controlled category before building more shopping slices.
-  - Current categories: `grocery`, `pharmacy`, `pet_store`, `toy_shop`, `stationery`, `other`.
-  - Do not persist free-form shop/place text.
-  - _Verification:_ [x] Planner/schema/repository tests cover category normalization, `stationery`, and unknown category fallback to `other`.
-- **Step 3.3.2: End-to-End `list_items` Slice**
-  - Extend the planner, handler, dispatcher tests, and replies for `list_items`.
-  - List replies must be grounded in Firestore results. The reply generator may use Gemini for final wording, but the prompt must include persisted `items` and `staledItems`, and deterministic formatting remains the fallback if reply generation fails.
-  - Retrieved list results include a `staledItems` field containing items whose `addedAt` timestamp is more than two weeks old. Stale items are surfaced for reply generation but are not deleted automatically.
-  - Planner item names are normalized before persistence as `user input language item name(English item name)`. If both names are the same, write the item once without duplicate parentheses.
-  - _Verification:_ [x] Unit tests cover `list_items` planning/execution/reply behavior for empty and non-empty lists, LLM reply prompt grounding, deterministic fallback, stale item detection, and item-name prompt rules.
-  - _Verification:_ [ ] Manual Telegram test lists the item added in Step 3.3.1 from the configured development Firestore database.
-- **Step 3.3.3: End-to-End `remove_items` Slice**
-  - Extend the same path for `remove_items`.
-  - Missing-item behavior should be explicit and user-facing.
-  - _Verification:_ [x] Repository unit tests cover successful removal and missing-item operation results.
-  - _Verification:_ [ ] Handler/reply unit tests cover successful removal and missing-item user replies.
-  - _Verification:_ [ ] Manual Telegram test removes an item from Firestore and confirms the reply reflects the repository result.
-- **Step 3.3.4: End-to-End `update_items` Slice**
-  - Extend the same path for `update_items`.
-  - Use current list state as planner context when needed so rename/update requests target existing items safely.
-  - _Verification:_ [x] Repository unit tests cover successful update and missing-item operation results.
-  - _Verification:_ [ ] Handler/reply unit tests cover successful update and missing-item user replies.
-  - _Verification:_ [ ] Manual Telegram test updates an item in Firestore and confirms the reply/list reflect the new item name.
-- **Step 3.3.5: End-to-End `clear_list` Slice**
-  - Extend the same path for `clear_list`.
-  - Clearing should reply from the repository result and make the final stored list empty.
-  - _Verification:_ [x] Repository unit tests cover clearing non-empty and already-empty lists.
-  - _Verification:_ [ ] Handler/reply unit tests cover clearing non-empty and already-empty lists.
-  - _Verification:_ [ ] Manual Telegram test clears the development Firestore list and confirms a follow-up list is empty.
-- **Step 3.3.6: Full Shopping Smoke Test**
-  - Add a manual smoke script or checklist that runs add, list, update, remove, and clear against configured `FIREBASE_PROJECT_ID` and `FIRESTORE_DATABASE_ID`.
-  - _Verification:_ [ ] Smoke flow passes against the development Firestore database and leaves predictable test data.
+- Shopping requests produce validated commands.
+- Invalid model output cannot write to PostgreSQL.
+- Replies describe only committed operation results.
+- Multi-language behavior is covered by evaluation fixtures.
 
-### Phase 4: Online Launch
+## Phase 4: Telegram MVP
 
-- **Step 4.1: Hono Webhook Server**
-  - Expose webhook endpoint using Hono.
-  - _Verification:_
-    - [ ] Test: Unit test for the Hono route handling Telegram updates.
-- **Step 4.2: GCP Containerization**
-  - Finalize `Dockerfile`.
-  - _Verification:_
-    - [ ] Manual: `docker build` succeeds; container starts locally.
-- **Step 4.3: Cloud Run Deployment**
-  - Setup `cd.yml` for automated deployment.
-  - _Verification:_
-    - [ ] Manual: Bot works in production via the Cloud Run URL.
-- **Step 4.4: Production Shopping Smoke Test**
-  - Verify the deployed bot can add, list, update, remove, and clear shopping items against the intended Firestore project.
-  - _Verification:_
-    - [ ] Manual: Send shopping commands to the production Telegram bot and confirm Firestore state matches replies.
+Goal: ship a usable private Telegram assistant.
 
-### Phase 5: Post-Launch Module Expansion
+- Add allowed-user enforcement with strict Telegram ID parsing.
+- Normalize Telegram text updates into application inputs.
+- Connect the shopping workflow.
+- Add idempotency using Telegram update IDs.
+- Start with long polling locally.
+- Add webhook support only for deployment.
+- Return safe user-facing errors without leaking model or database details.
 
-- **Step 5.1: Audio-to-Brain Link**
-  - Implement `audio.ts` to fetch and pass audio bytes to Gemini.
-  - _Verification:_ [ ] Send voice note and verify transcription and intent routing.
-- **Step 5.2: Feedback & Bug Tracker**
-  - Implement a `feedback` module.
-  - Define a tool for Gemini: `record_bot_feedback(category, detail)`.
-  - _Verification:_ [ ] Manual: Tell the bot "I found a bug: the audio is too slow", and verify it appears in the Firestore `feedback` collection.
-- **Step 5.3: Multi-Language Loop**
-  - Refine system prompts for language parity.
-  - _Verification:_ [ ] Manual: Multi-language voice note testing (FR, EN, ES, etc.).
+Exit criteria:
 
-## 4. Multi-Language Strategy
+- Add, list, update, remove, and clear work end to end.
+- Duplicate Telegram updates do not duplicate writes.
+- Unauthorized users are rejected.
+- A manual smoke test passes in at least two languages.
 
-- **Prompting:** The System Instruction will state: _"You are a helpful assistant. Detect the user's language. If a tool is called, process the data. Always output your final text response in the detected language."_
-- **Voice:** **Gemini 3 Flash** natively understands audio in multiple languages with high fidelity.
+## Phase 5: Conversation and Feedback
+
+Goal: add only the memory needed for coherent interactions.
+
+- Add conversations and messages if real product behavior needs persisted history.
+- Bound context by turn count or token budget.
+- Add feedback recording as a normal application service and Eino tool.
+- Define retention and deletion behavior before storing broad chat history.
+
+Do not add semantic memory by default. If retrieval quality later requires it,
+add a separate `memories` table with `pgvector` and measure the benefit.
+
+Exit criteria:
+
+- Context loading is bounded and observable.
+- Feedback writes are validated and attributable.
+- Retention behavior is documented and tested.
+
+## Phase 6: Voice and Production
+
+Goal: support voice input and deploy a production-ready service.
+
+- Download and validate Telegram voice files.
+- Add transcription/model processing with size and timeout limits.
+- Containerize and deploy.
+- Use managed PostgreSQL with backups and point-in-time recovery.
+- Add metrics, tracing, error reporting, and alerting.
+- Add deployment smoke tests and rollback instructions.
+
+Exit criteria:
+
+- Voice and text use the same application workflows after normalization.
+- Production deployment is reproducible.
+- Database backup and restore procedures are verified.
+
+## Deferred Decisions
+
+These require evidence before adoption:
+
+- Redis
+- Dedicated vector database
+- Message queue
+- Multiple deployable services
+- Multi-agent architecture
+- Event sourcing
+- Kubernetes
+
+## First Implementation Milestone
+
+The first milestone is intentionally narrow:
+
+1. Bootstrap the Go service.
+2. Start PostgreSQL locally.
+3. Add the initial schema.
+4. Implement and test `add_items` and `list_items` without Eino.
+5. Add the Eino planner for those two commands.
+6. Connect Telegram.
+
+Only after that slice works should update, remove, clear, feedback, memory, or
+voice work begin.
