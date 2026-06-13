@@ -27,6 +27,28 @@ Preserved prompts:
 These prompts are product assets. Changes to them should be reviewed separately
 from infrastructure or application code.
 
+## Local Configuration
+
+The service reads configuration from environment variables. For local
+development, variables in `.env` can be exported by the shell before starting
+the service:
+
+```bash
+set -a
+source .env
+set +a
+go run ./cmd/cinna
+```
+
+- `set -a` enables automatic exporting of variables created or changed in the
+  current shell.
+- `source .env` evaluates the assignments in `.env` in the current shell.
+- `set +a` disables automatic exporting again.
+- `go run ./cmd/cinna` starts the service and inherits the exported variables.
+
+Without `set -a`, variables loaded by `source .env` may remain shell variables
+and will not be available to the Go process through `os.Getenv`.
+
 ## Target Shape
 
 ```text
