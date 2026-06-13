@@ -1,5 +1,11 @@
 # Cinna Project Notes
 
+## Collaboration
+
+For all future implementation requests, only show the proposed code or patch.
+Do not modify files, apply patches, run formatting, or execute any command that
+changes the workspace. The user will make all changes manually.
+
 ## Status
 
 Cinna is a greenfield rebuild. The previous TypeScript/Bun/Firestore application
