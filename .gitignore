@@ -12,6 +12,7 @@ build/
 coverage/
 *.coverprofile
 *.test
+coverage.*
 
 # Local tooling and operating system files
 .DS_Store
