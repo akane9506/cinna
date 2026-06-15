@@ -23,7 +23,7 @@ func NewClient(
 	botToken string,
 	webhookURL string,
 	webhookSecret string,
-	allowedUsers []int64,
+	allowedAdminUsers []int64,
 	// handler Handler,
 	logger *slog.Logger,
 ) (*Client, error) {
@@ -32,7 +32,7 @@ func NewClient(
 	}
 	// create a user lookup set
 	allowed := make(map[int64]struct{})
-	for _, userID := range allowedUsers {
+	for _, userID := range allowedAdminUsers {
 		allowed[userID] = struct{}{}
 	}
 	client := &Client{

@@ -1,81 +1,175 @@
 # Cinna
 
-Cinna is being rebuilt as a modular Telegram assistant in Go.
+Cinna is a modular Telegram assistant written in Go.
 
-The new implementation will use:
+## Stack
 
 - Go
-- CloudWeGo Eino for model and workflow orchestration
-- PostgreSQL as the system of record
-- Telegram Bot API as the initial transport
-
-The previous TypeScript, Bun, and Firestore implementation has been intentionally
-removed. There is no compatibility layer, data migration, or code migration
-planned.
+- Telegram Bot API
+- PostgreSQL
+- CloudWeGo Eino
+- `pgx`
+- `goose`
+- `sqlc`
 
 ## Current State
 
-The repository currently contains product prompts and planning documents only.
-Implementation starts with Phase 0 in `CINNA_PLAN.md`.
+The Go service currently supports:
 
-Preserved prompts:
+- Environment-based configuration
+- Telegram long polling in development
+- Telegram webhooks in production
+- An environment-based administrator allow list
+- Graceful HTTP server shutdown
+- Local PostgreSQL using Docker Compose
 
-- `prompts/core/persona.md`
-- `prompts/shopping/planner.instruction.md`
-- `prompts/shopping/reply.instruction.md`
+PostgreSQL application connectivity, migrations, and the database-backed allow
+list are still in progress. See `PROGRESS.md`.
 
-These prompts are product assets. Changes to them should be reviewed separately
-from infrastructure or application code.
+## Requirements
 
-## Local Configuration
+- Go 1.26 or later
+- Docker Desktop
+- A Telegram bot token from BotFather
 
-The service reads configuration from environment variables. For local
-development, variables in `.env` can be exported by the shell before starting
-the service:
+## Local Environment
+
+Create `.env` from the example:
+
+```bash
+cp .env.example .env
+```
+
+Configure these values:
+
+```dotenv
+GO_ENV=development
+TELEGRAM_BOT_TOKEN=your_telegram_bot_token
+ALLOWED_ADMIN_USERS=12345678,87654321
+
+POSTGRES_USER=cinna
+POSTGRES_PASSWORD=change_me
+POSTGRES_DB=cinna
+
+DATABASE_URL=postgres://cinna:change_me@localhost:5432/cinna?sslmode=disable
+```
+
+`ALLOWED_ADMIN_USERS` must contain numeric Telegram user IDs separated by
+commas.
+
+The webhook variables are required only in production:
+
+```dotenv
+WEBHOOK_URL=https://your-service.example.com
+WEBHOOK_SECRET=your_webhook_secret
+```
+
+Do not commit `.env` because it contains credentials.
+
+## Start PostgreSQL
+
+Docker Compose automatically reads `.env` from the project directory.
+
+Start PostgreSQL:
 
 ```bash
 set -a
 source .env
 set +a
+docker compose up -d postgres
+```
+
+Check its status:
+
+```bash
+docker compose ps
+```
+
+Follow its logs:
+
+```bash
+docker compose logs -f postgres
+```
+
+Open a PostgreSQL shell:
+
+```bash
+set -a
+source .env
+set +a
+docker compose exec postgres \
+  psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+```
+
+Run a connection test:
+
+```bash
+set -a
+source .env
+set +a
+docker compose exec postgres \
+  psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
+  -c "SELECT current_database(), current_user;"
+```
+
+Stop PostgreSQL while preserving its data:
+
+```bash
+docker compose down
+```
+
+Delete PostgreSQL and its local data:
+
+```bash
+docker compose down -v
+```
+
+The last command permanently removes the local database volume.
+
+## Run Cinna
+
+Export the environment variables and start the service:
+
+```bash
+set -a
+source .env
+set +a
+
 go run ./cmd/cinna
 ```
 
-- `set -a` enables automatic exporting of variables created or changed in the
-  current shell.
-- `source .env` evaluates the assignments in `.env` in the current shell.
-- `set +a` disables automatic exporting again.
-- `go run ./cmd/cinna` starts the service and inherits the exported variables.
+In development, Cinna connects to Telegram using long polling.
 
-Without `set -a`, variables loaded by `source .env` may remain shell variables
-and will not be available to the Go process through `os.Getenv`.
+Although Docker starts PostgreSQL locally, the Go service does not use it yet.
+Database connectivity with `pgx` is part of the current implementation phase.
 
-## Target Shape
+## Tests
+
+```bash
+go test ./...
+go vet ./...
+```
+
+## Project Structure
 
 ```text
 cinna/
 ├── cmd/
 │   └── cinna/
 ├── internal/
-│   ├── app/
-│   ├── agent/
-│   ├── conversation/
-│   ├── shopping/
-│   ├── platform/
-│   │   ├── postgres/
-│   │   └── telegram/
-│   └── observability/
+│   └── app/
+│       └── telegram/
 ├── db/
 │   ├── migrations/
 │   └── queries/
 ├── prompts/
 │   ├── core/
 │   └── shopping/
-├── tests/
-│   └── integration/
-├── deployments/
+├── compose.yaml
 ├── go.mod
-└── Makefile
+├── CINNA_PLAN.md
+└── PROGRESS.md
 ```
 
-This will remain one deployable modular monolith until operational evidence
-justifies splitting it.
+Cinna will remain a single deployable modular monolith until operational
+evidence justifies splitting it.

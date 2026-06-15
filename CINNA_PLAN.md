@@ -1,5 +1,7 @@
 # Cinna Plan
 
+Implementation status is tracked in `PROGRESS.md`.
+
 ## Architecture
 
 ```text
@@ -54,15 +56,33 @@ Create directories only when they are needed.
 ### 1. Bootstrap
 
 - Initialize the Go service.
-- Add configuration, logging, shutdown, and tests.
+- Add environment-based configuration.
+- Add structured logging.
+- Add signal handling and graceful shutdown.
+- Test configuration, startup, and shutdown behavior.
 
 ### 2. Telegram
 
-- Connect using long polling.
+- Connect using long polling in development.
+- Configure webhook delivery in production.
 - Receive and reply to text messages.
-- Restrict access to allowed users.
+- Safely ignore unsupported or malformed updates.
+- Wire the Telegram adapter to the application handler.
+- Restrict access using the PostgreSQL-backed allow list.
+- Test text messages, authorization, and error handling.
+- Verify webhook startup and shutdown in a production-like environment.
 
-### 3. Agent Graph
+### 3. PostgreSQL and Allow List
+
+- Add PostgreSQL configuration and connectivity with `pgx`.
+- Add migration tooling with `goose`.
+- Create the allowed Telegram users migration.
+- Add typed allow-list queries with `sqlc`.
+- Define and implement the allow-list repository.
+- Wire the allow-list repository into the Telegram adapter.
+- Add repository integration and Telegram authorization tests.
+
+### 4. Agent Graph
 
 Build this graph:
 
@@ -76,18 +96,13 @@ START
   -> chat_model
 ```
 
-- Add the persona prompt.
-- Store messages in graph state.
-- Limit iterations and execution time.
-- Return a safe fallback when execution fails.
+### 5. Shopping Persistence
 
-### 4. PostgreSQL
-
-- Add PostgreSQL, migrations, and typed queries.
-- Implement shopping domain services.
+- Add shopping-list migrations and typed queries.
+- Implement shopping repository interfaces and domain services.
 - Test services independently from the graph.
 
-### 5. Shopping Tools
+### 6. Shopping Tools
 
 Start with:
 
@@ -98,25 +113,8 @@ list_shopping_items
 
 - Validate tool arguments.
 - Use the authenticated Telegram user.
-- Call shopping services.
+- Call shopping services instead of SQL directly.
 - Return committed operation results.
-
-### 6. Reliability
-
-- Deduplicate Telegram updates.
-- Add timeouts, error handling, and observability.
-- Require confirmation for destructive operations.
-
-### 7. Extend
-
-Add features only after the first workflow works end to end:
-
-- Complete and remove items.
-- Clear completed items.
-- Conversation history.
-- Feedback.
-- Voice input.
-- Production deployment.
 
 ## First Target
 
