@@ -27,6 +27,8 @@ cinna/
 │   ├── app/                  # configuration and dependency wiring
 │   ├── agent/                # Eino graph, state, and tool routing
 │   ├── shopping/             # domain services and repository interfaces
+│   ├── postygres/
+│   │   └── sqlc/             # generated sqlc code
 │   └── platform/
 │       ├── postgres/         # PostgreSQL repositories
 │       └── telegram/         # Telegram adapter

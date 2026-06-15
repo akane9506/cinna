@@ -14,6 +14,7 @@ const (
 	allowedAdminUsersEnv = "ALLOWED_ADMIN_USERS"
 	webhookURLEnv        = "WEBHOOK_URL"
 	webhookSecretEnv     = "WEBHOOK_SECRET"
+	dbURLEnv             = "DATABASE_URL"
 )
 
 const (
