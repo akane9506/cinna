@@ -15,7 +15,19 @@ Create and configure the local environment:
 
 ```bash
 cp .env.example .env
+```
 
+Edit `.env` before loading it. At minimum, set:
+
+```dotenv
+GO_ENV=development
+TELEGRAM_BOT_TOKEN=your_telegram_bot_token
+ALLOWED_ADMIN_USERS=12345678,87654321
+```
+
+Load the environment:
+
+```bash
 set -a
 source .env
 set +a
