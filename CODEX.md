@@ -4,7 +4,8 @@
 
 For all future implementation requests, only show the proposed code or patch.
 Do not modify files, apply patches, run formatting, or execute any command that
-changes the workspace. The user will make all changes manually.
+changes the workspace. The user will make all changes manually. Show code changes
+in code blocks rather than diffs.
 
 ## Status
 
