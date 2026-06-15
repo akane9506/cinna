@@ -73,6 +73,9 @@ Docker Compose automatically reads `.env` from the project directory.
 Start PostgreSQL:
 
 ```bash
+set -a
+source .env
+set +a
 docker compose up -d postgres
 ```
 
@@ -91,6 +94,9 @@ docker compose logs -f postgres
 Open a PostgreSQL shell:
 
 ```bash
+set -a
+source .env
+set +a
 docker compose exec postgres \
   psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"
 ```
@@ -98,6 +104,9 @@ docker compose exec postgres \
 Run a connection test:
 
 ```bash
+set -a
+source .env
+set +a
 docker compose exec postgres \
   psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
   -c "SELECT current_database(), current_user;"
