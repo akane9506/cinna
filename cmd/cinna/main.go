@@ -2,11 +2,13 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/akane9506/cinna/internal/app"
 	"github.com/akane9506/cinna/internal/app/telegram"
@@ -67,9 +69,33 @@ func runWebhook(
 	if port == "" {
 		port = "8080"
 	}
-	logger.Info("Starting http server", "port", port)
-	if err := http.ListenAndServe(":"+port, tgClient.WebhookHandler()); err != nil {
-		logger.Error("http server failed", "error", err)
-		os.Exit(1)
+	server := http.Server{
+		Addr:    ":" + port,
+		Handler: tgClient.WebhookHandler(),
+	}
+	serverErr := make(chan error, 1)
+	go func() {
+		logger.Info("Starting http server", "port", port)
+		serverErr <- server.ListenAndServe()
+	}()
+	select {
+	case <-ctx.Done():
+		logger.Info("shutting down http server")
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := server.Shutdown(shutdownCtx); err != nil {
+			logger.Error("http server shutdown failed", "error", err)
+			os.Exit(1)
+		}
+		if err := <-serverErr; err != nil && !errors.Is(err, http.ErrServerClosed) {
+			logger.Error("http server failed", "error", err)
+			os.Exit(1)
+		}
+		logger.Info("http server stopped")
+	case err := <-serverErr:
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			logger.Error("http server failed", "error", err)
+			os.Exit(1)
+		}
 	}
 }
