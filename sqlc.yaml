@@ -5,7 +5,7 @@ sql:
     queries: db/queries
     gen:
       go:
-        package: postgresdb
-        out: internal/postygres/sqlc
+        package: sqlc
+        out: internal/postgres/sqlc
         sql_package: pgx/v5
         emit_empty_slices: true
