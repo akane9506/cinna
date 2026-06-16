@@ -42,6 +42,9 @@ func NewClient(
 
 	opts := []bot.Option{
 		bot.WithDefaultHandler(defaultHandler),
+		bot.WithMiddlewares(
+			AllowListMiddleware(repositories.AllowList, logger),
+		),
 		bot.WithWebhookSecretToken(webhookSecret),
 	}
 
@@ -91,5 +94,3 @@ func defaultHandler(ctx context.Context, b *bot.Bot, update *models.Update) {
 		Text:   update.Message.Text,
 	})
 }
-
-// next step, setup a db and cache for adding/updating/removing allowed users
