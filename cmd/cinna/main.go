@@ -11,7 +11,9 @@ import (
 	"time"
 
 	"github.com/akane9506/cinna/internal/app"
+	"github.com/akane9506/cinna/internal/app/ports"
 	"github.com/akane9506/cinna/internal/app/telegram"
+	db "github.com/akane9506/cinna/internal/postgres"
 )
 
 func main() {
@@ -31,12 +33,26 @@ func main() {
 	)
 	defer stop()
 
+	// connect to PostgreSQL
+	pool, err := db.Open(ctx, config.DatabaseURL)
+	if err != nil {
+		logger.Error("failed to connect to PostgreSQL server", "error", err)
+		os.Exit(1)
+	}
+	defer pool.Close()
+
+	// setup repositories
+	allowlistRepo := db.NewAllowListRepository(pool)
+	repos := &ports.Repositories{
+		AllowList: allowlistRepo,
+	}
+
 	// start telegram bot
 	tgClient, err := telegram.NewClient(
 		config.TelegramBotToken,
+		repos,
 		config.WebhookURL,
 		config.WebhookSecret,
-		config.AllowedAdminUsers,
 		logger,
 	)
 	if err != nil {
@@ -52,8 +68,6 @@ func main() {
 }
 
 // there's still some issue with this part:
-// 1. Enforce https because telegram does not support http
-// 2. When press ctrl + C, the terminal(program) doesn't exit
 // But this will only be tested when going to the cloud
 func runWebhook(
 	ctx context.Context,

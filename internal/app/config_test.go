@@ -6,94 +6,82 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+var mockDBUrl string = "postgres://a:a_pswrd@localhost:5432/cinna"
+
 func TestLoadConfig(t *testing.T) {
 	tests := []struct {
 		name                       string
 		runtimeEnv                 string
 		telegramEnv                string
-		adminUsersEnv              string
+		dbUrlEnv                   string
 		webhookUrlEnv              string
 		webhookSecretEnv           string
 		expected                   *Config
 		expectedRuntimeError       bool
+		expectDBUrlError           bool
 		expectTelegramError        bool
-		expectAdminError           bool
 		expectedWebhookUrlError    bool
 		expectedWebhookSecretError bool
 	}{
 		{
-			name:          "success in development",
-			telegramEnv:   "abc",
-			adminUsersEnv: "123,, 456, 789",
+			name:        "success in development",
+			telegramEnv: "abc",
+			dbUrlEnv:    mockDBUrl,
 			expected: &Config{
-				TelegramBotToken:  "abc",
-				AllowedAdminUsers: []int64{123, 456, 789},
-				RuntimeEnv:        "development",
+				TelegramBotToken: "abc",
+				DatabaseURL:      mockDBUrl,
+				RuntimeEnv:       "development",
 			},
 		},
 		{
 			name:             "success in production",
 			runtimeEnv:       "production",
 			telegramEnv:      "abc",
-			adminUsersEnv:    "123,, 456, 789",
+			dbUrlEnv:         mockDBUrl,
 			webhookUrlEnv:    "https://localhost",
 			webhookSecretEnv: "secret",
 			expected: &Config{
-				TelegramBotToken:  "abc",
-				AllowedAdminUsers: []int64{123, 456, 789},
-				RuntimeEnv:        "production",
-				WebhookURL:        "https://localhost",
-				WebhookSecret:     "secret",
+				TelegramBotToken: "abc",
+				RuntimeEnv:       "production",
+				DatabaseURL:      mockDBUrl,
+				WebhookURL:       "https://localhost",
+				WebhookSecret:    "secret",
 			},
 		},
 		{
 			name:                 "invalid runtime",
+			dbUrlEnv:             mockDBUrl,
 			runtimeEnv:           "wrong",
-			expected:             nil,
 			expectedRuntimeError: true,
+		},
+		{
+			name:             "missing db url",
+			telegramEnv:      "",
+			webhookUrlEnv:    "http://localhost",
+			webhookSecretEnv: "secret",
+			expectDBUrlError: true,
 		},
 		{
 			name:                "invalid telegram env",
 			telegramEnv:         "",
-			adminUsersEnv:       "123,, 456, 789",
+			dbUrlEnv:            mockDBUrl,
 			webhookUrlEnv:       "http://localhost",
 			webhookSecretEnv:    "secret",
-			expected:            nil,
 			expectTelegramError: true,
 		},
 		{
-			name:             "invalid admin users env",
-			telegramEnv:      "abc",
-			adminUsersEnv:    "name,, 456, 789",
-			webhookUrlEnv:    "http://localhost",
-			webhookSecretEnv: "secret",
-			expected:         nil,
-			expectAdminError: true,
-		},
-		{
-			name:             "empty admin user",
-			telegramEnv:      "abc",
-			adminUsersEnv:    ",,",
-			webhookUrlEnv:    "http://localhost",
-			webhookSecretEnv: "secret",
-			expected:         nil,
-			expectAdminError: true,
-		},
-		{
 			name:                    "missing webhook in production",
+			dbUrlEnv:                mockDBUrl,
 			runtimeEnv:              "production",
 			telegramEnv:             "abc",
-			adminUsersEnv:           "123,, 456, 789",
 			expectedWebhookUrlError: true,
-			expected:                nil,
 		},
 		{
 			name:                       "missing websocket secret",
+			dbUrlEnv:                   mockDBUrl,
 			runtimeEnv:                 "production",
 			telegramEnv:                "abc",
-			adminUsersEnv:              "123,, 456, 789",
 			webhookUrlEnv:              "https://localhost",
-			expected:                   nil,
 			expectedWebhookSecretError: true,
 		},
 	}
@@ -102,17 +90,14 @@ func TestLoadConfig(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Setenv(goEnv, tt.runtimeEnv)
 			t.Setenv(telegramBotTokenEnv, tt.telegramEnv)
-			t.Setenv(allowedAdminUsersEnv, tt.adminUsersEnv)
 			t.Setenv(webhookURLEnv, tt.webhookUrlEnv)
 			t.Setenv(webhookSecretEnv, tt.webhookSecretEnv)
+			t.Setenv(dbURLEnv, tt.dbUrlEnv)
 			config, err := LoadConfig()
 			if tt.expected == nil {
 				assert.Error(t, err)
 				if tt.expectTelegramError {
 					assert.Contains(t, err.Error(), telegramBotTokenEnv)
-				}
-				if tt.expectAdminError {
-					assert.Contains(t, err.Error(), allowedAdminUsersEnv)
 				}
 				if tt.expectedWebhookUrlError {
 					assert.Contains(t, err.Error(), webhookURLEnv)
@@ -122,6 +107,9 @@ func TestLoadConfig(t *testing.T) {
 				}
 				if tt.expectedRuntimeError {
 					assert.Contains(t, err.Error(), goEnv)
+				}
+				if tt.expectDBUrlError {
+					assert.Contains(t, err.Error(), dbURLEnv)
 				}
 			} else {
 				assert.Equal(t, config, tt.expected)

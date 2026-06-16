@@ -5,25 +5,26 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/akane9506/cinna/internal/app/ports"
 	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
 )
 
 type Client struct {
-	allowedUsers  map[int64]struct{}
+	repositories  *ports.Repositories
+	bot           *bot.Bot
 	webhookURL    string
 	webhookSecret string
 	logger        *slog.Logger
-	bot           *bot.Bot
 	handler       Handler
 }
 
 // create a new telegram bot client
 func NewClient(
 	botToken string,
+	repositories *ports.Repositories,
 	webhookURL string,
 	webhookSecret string,
-	allowedAdminUsers []int64,
 	// handler Handler,
 	logger *slog.Logger,
 ) (*Client, error) {
@@ -31,12 +32,8 @@ func NewClient(
 		logger = slog.Default()
 	}
 	// create a user lookup set
-	allowed := make(map[int64]struct{})
-	for _, userID := range allowedAdminUsers {
-		allowed[userID] = struct{}{}
-	}
 	client := &Client{
-		allowedUsers:  allowed,
+		repositories:  repositories,
 		logger:        logger,
 		webhookURL:    webhookURL,
 		webhookSecret: webhookSecret,
@@ -86,15 +83,6 @@ func (c *Client) WebhookHandler() http.Handler {
 }
 
 // ========== helper functions ==========
-
-func (c *Client) isAllowed(userID int64) bool {
-	// if no allowed users, basically allow open access
-	if len(c.allowedUsers) == 0 {
-		return true
-	}
-	_, ok := c.allowedUsers[userID]
-	return ok
-}
 
 // temp handler
 func defaultHandler(ctx context.Context, b *bot.Bot, update *models.Update) {

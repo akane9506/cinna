@@ -4,17 +4,15 @@ import (
 	"fmt"
 	"os"
 	"slices"
-	"strconv"
 	"strings"
 )
 
 const (
-	goEnv                = "GO_ENV"
-	telegramBotTokenEnv  = "TELEGRAM_BOT_TOKEN"
-	allowedAdminUsersEnv = "ALLOWED_ADMIN_USERS"
-	webhookURLEnv        = "WEBHOOK_URL"
-	webhookSecretEnv     = "WEBHOOK_SECRET"
-	dbURLEnv             = "DATABASE_URL"
+	goEnv               = "GO_ENV"
+	telegramBotTokenEnv = "TELEGRAM_BOT_TOKEN"
+	webhookURLEnv       = "WEBHOOK_URL"
+	webhookSecretEnv    = "WEBHOOK_SECRET"
+	dbURLEnv            = "DATABASE_URL"
 )
 
 const (
@@ -23,11 +21,11 @@ const (
 )
 
 type Config struct {
-	RuntimeEnv        string
-	TelegramBotToken  string
-	WebhookURL        string
-	WebhookSecret     string
-	AllowedAdminUsers []int64
+	RuntimeEnv       string
+	TelegramBotToken string
+	WebhookURL       string
+	WebhookSecret    string
+	DatabaseURL      string
 }
 
 func LoadConfig() (*Config, error) {
@@ -42,6 +40,13 @@ func LoadConfig() (*Config, error) {
 	} else {
 		config.RuntimeEnv = runtimeEnv
 	}
+
+	// setup database url
+	dbUrl := strings.TrimSpace(os.Getenv(dbURLEnv))
+	if dbUrl == "" {
+		return nil, fmt.Errorf("%s is required", dbURLEnv)
+	}
+	config.DatabaseURL = dbUrl
 
 	// setup telegram bot token
 	botToken := strings.TrimSpace(os.Getenv(telegramBotTokenEnv))
@@ -65,33 +70,5 @@ func LoadConfig() (*Config, error) {
 		config.WebhookSecret = webhookSecret
 	}
 
-	// setup allowed admin user list
-	adminUsers, err := parseAllowedAdminUsers()
-	if err != nil {
-		return nil, fmt.Errorf(
-			"Error loading %s: %w", allowedAdminUsersEnv, err)
-	}
-	config.AllowedAdminUsers = adminUsers
-
 	return config, nil
-}
-
-func parseAllowedAdminUsers() ([]int64, error) {
-	rawUsers := os.Getenv(allowedAdminUsersEnv)
-	allowedAdminUsers := []int64{}
-	for userStr := range strings.SplitSeq(rawUsers, ",") {
-		userStr = strings.TrimSpace(userStr)
-		if len(userStr) == 0 {
-			continue
-		}
-		id, err := strconv.ParseInt(userStr, 10, 64)
-		if err != nil {
-			return nil, fmt.Errorf("Invalid Admin User ID: %s", userStr)
-		}
-		allowedAdminUsers = append(allowedAdminUsers, id)
-	}
-	if len(allowedAdminUsers) == 0 {
-		return nil, fmt.Errorf("Admin users shouldn't be empty")
-	}
-	return allowedAdminUsers, nil
 }
