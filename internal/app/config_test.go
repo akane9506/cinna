@@ -7,6 +7,7 @@ import (
 )
 
 var mockDBUrl string = "postgres://a:a_pswrd@localhost:5432/cinna"
+var mockDeepseekAPIKey string = "deepseek_api_key"
 
 func TestLoadConfig(t *testing.T) {
 	tests := []struct {
@@ -14,6 +15,7 @@ func TestLoadConfig(t *testing.T) {
 		runtimeEnv                 string
 		telegramEnv                string
 		dbUrlEnv                   string
+		deepseekAPIEnv             string
 		webhookUrlEnv              string
 		webhookSecretEnv           string
 		expected                   *Config
@@ -24,12 +26,14 @@ func TestLoadConfig(t *testing.T) {
 		expectedWebhookSecretError bool
 	}{
 		{
-			name:        "success in development",
-			telegramEnv: "abc",
-			dbUrlEnv:    mockDBUrl,
+			name:           "success in development",
+			telegramEnv:    "abc",
+			dbUrlEnv:       mockDBUrl,
+			deepseekAPIEnv: mockDeepseekAPIKey,
 			expected: &Config{
 				TelegramBotToken: "abc",
 				DatabaseURL:      mockDBUrl,
+				DeepseekAPIKey:   mockDeepseekAPIKey,
 				RuntimeEnv:       "development",
 			},
 		},
@@ -38,12 +42,14 @@ func TestLoadConfig(t *testing.T) {
 			runtimeEnv:       "production",
 			telegramEnv:      "abc",
 			dbUrlEnv:         mockDBUrl,
+			deepseekAPIEnv:   mockDeepseekAPIKey,
 			webhookUrlEnv:    "https://localhost",
 			webhookSecretEnv: "secret",
 			expected: &Config{
 				TelegramBotToken: "abc",
 				RuntimeEnv:       "production",
 				DatabaseURL:      mockDBUrl,
+				DeepseekAPIKey:   mockDeepseekAPIKey,
 				WebhookURL:       "https://localhost",
 				WebhookSecret:    "secret",
 			},
@@ -93,6 +99,7 @@ func TestLoadConfig(t *testing.T) {
 			t.Setenv(webhookURLEnv, tt.webhookUrlEnv)
 			t.Setenv(webhookSecretEnv, tt.webhookSecretEnv)
 			t.Setenv(dbURLEnv, tt.dbUrlEnv)
+			t.Setenv(deepseekEnv, tt.deepseekAPIEnv)
 			config, err := LoadConfig()
 			if tt.expected == nil {
 				assert.Error(t, err)
