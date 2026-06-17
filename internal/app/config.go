@@ -13,6 +13,7 @@ const (
 	webhookURLEnv       = "WEBHOOK_URL"
 	webhookSecretEnv    = "WEBHOOK_SECRET"
 	dbURLEnv            = "DATABASE_URL"
+	deepseekEnv         = "DEEPSEEK_API_KEY"
 )
 
 const (
@@ -26,6 +27,7 @@ type Config struct {
 	WebhookURL       string
 	WebhookSecret    string
 	DatabaseURL      string
+	DeepseekAPIKey   string
 }
 
 func LoadConfig() (*Config, error) {
@@ -69,6 +71,13 @@ func LoadConfig() (*Config, error) {
 		}
 		config.WebhookSecret = webhookSecret
 	}
+
+	// setup LLM API keys
+	deepseekAPIKey := strings.TrimSpace(os.Getenv(deepseekEnv))
+	if deepseekAPIKey == "" {
+		return nil, fmt.Errorf("%s is required", deepseekEnv)
+	}
+	config.DeepseekAPIKey = deepseekAPIKey
 
 	return config, nil
 }
