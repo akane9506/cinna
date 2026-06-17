@@ -25,7 +25,10 @@ func TestDeepseekFlashModelManual(t *testing.T) {
 	models := NewLLMModels(&APIKey{
 		Deepseek: apiKey,
 	}, slog.Default())
-	chatModel := models.CreateDeepseekFlashModel(ctx)
+	chatModel, err := models.CreateDeepseekFlashModel(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
 	resp, err := chatModel.Generate(ctx, []*schema.Message{
 		schema.UserMessage("Say hello in 3 different languages"),
 	})

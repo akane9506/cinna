@@ -13,7 +13,8 @@ const (
 	webhookURLEnv       = "WEBHOOK_URL"
 	webhookSecretEnv    = "WEBHOOK_SECRET"
 	dbURLEnv            = "DATABASE_URL"
-	deepseekEnv         = "DEEPSEEK_API_KEY"
+	// llm keys are not mandatory; they will be check in model creation
+	deepseekEnv = "DEEPSEEK_API_KEY"
 )
 
 const (
@@ -74,9 +75,6 @@ func LoadConfig() (*Config, error) {
 
 	// setup LLM API keys
 	deepseekAPIKey := strings.TrimSpace(os.Getenv(deepseekEnv))
-	if deepseekAPIKey == "" {
-		return nil, fmt.Errorf("%s is required", deepseekEnv)
-	}
 	config.DeepseekAPIKey = deepseekAPIKey
 
 	return config, nil

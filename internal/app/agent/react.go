@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 
 	"github.com/akane9506/cinna/internal/app"
@@ -15,12 +16,15 @@ type HistoryMessage struct {
 	UserMessage   string
 }
 
-func NewCinnaReactAgent(ctx context.Context, config *app.Config, logger *slog.Logger) {
+func NewCinnaReactAgent(ctx context.Context, config *app.Config, logger *slog.Logger) error {
 	apiKey := &APIKey{
 		Deepseek: config.DeepseekAPIKey,
 	}
 	models := NewLLMModels(apiKey, logger)
-	chatModel := models.CreateDeepseekFlashModel(ctx)
+	chatModel, err := models.CreateDeepseekFlashModel(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to create cinna react agent: %w", err)
+	}
 
 	// build graph with local chat history state
 	graph := compose.NewGraph[[]*schema.Message, *schema.Message](
@@ -44,4 +48,6 @@ func NewCinnaReactAgent(ctx context.Context, config *app.Config, logger *slog.Lo
 			},
 		),
 	)
+
+	return nil
 }

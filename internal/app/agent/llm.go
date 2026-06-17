@@ -2,8 +2,8 @@ package agent
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
-	"os"
 	"sync"
 
 	"github.com/cloudwego/eino-ext/components/model/deepseek"
@@ -12,6 +12,7 @@ import (
 
 var (
 	deepseekFlashModel *deepseek.ChatModel
+	deepseekFlashError error
 	deepseekFlashOnce  sync.Once
 )
 
@@ -36,8 +37,11 @@ func NewLLMModels(apiKey *APIKey, logger *slog.Logger) *Models {
 	}
 }
 
-func (m *Models) CreateDeepseekFlashModel(ctx context.Context) *deepseek.ChatModel {
+func (m *Models) CreateDeepseekFlashModel(ctx context.Context) (*deepseek.ChatModel, error) {
 	deepseekFlashOnce.Do(func() {
+		if m.apiKey.Deepseek == "" {
+			deepseekFlashError = fmt.Errorf("DEEPSEEK_API_KEY is required")
+		}
 		var err error
 		deepseekFlashModel, err = deepseek.NewChatModel(ctx, &deepseek.ChatModelConfig{
 			APIKey:  m.apiKey.Deepseek,
@@ -45,11 +49,11 @@ func (m *Models) CreateDeepseekFlashModel(ctx context.Context) *deepseek.ChatMod
 			Model:   deepseekFlashModelName,
 		})
 		if err != nil {
-			m.logger.Error("failed to start deepseek flash model", "error", err)
-			os.Exit(1)
+			deepseekFlashError = fmt.Errorf("failed to start deepseek flash model: %w", err)
+			return
 		}
 	})
-	return deepseekFlashModel
+	return deepseekFlashModel, deepseekFlashError
 }
 
 // Callbacks, used for debugging purpose
