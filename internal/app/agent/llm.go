@@ -7,13 +7,16 @@ import (
 	"sync"
 
 	"github.com/cloudwego/eino-ext/components/model/deepseek"
-	"github.com/cloudwego/eino/callbacks"
 )
 
 var (
 	deepseekFlashModel *deepseek.ChatModel
 	deepseekFlashError error
 	deepseekFlashOnce  sync.Once
+
+	deepseekFlashJSONModel *deepseek.ChatModel
+	deepseekFlashJSONError error
+	deepseekFlashJSONOnce  sync.Once
 )
 
 const (
@@ -40,7 +43,8 @@ func NewLLMModels(apiKey *APIKey, logger *slog.Logger) *Models {
 func (m *Models) CreateDeepseekFlashModel(ctx context.Context) (*deepseek.ChatModel, error) {
 	deepseekFlashOnce.Do(func() {
 		if m.apiKey.Deepseek == "" {
-			deepseekFlashError = fmt.Errorf("DEEPSEEK_API_KEY is required")
+			deepseekFlashError = fmt.Errorf("DEEPSEEK_API_KEY is required for flash model")
+			return
 		}
 		var err error
 		deepseekFlashModel, err = deepseek.NewChatModel(ctx, &deepseek.ChatModelConfig{
@@ -56,25 +60,27 @@ func (m *Models) CreateDeepseekFlashModel(ctx context.Context) (*deepseek.ChatMo
 	return deepseekFlashModel, deepseekFlashError
 }
 
-// Callbacks, used for debugging purpose
-func (m *Models) GetStartCallback() callbacks.Handler {
-	return callbacks.NewHandlerBuilder().
-		OnStartFn(func(
-			ctx context.Context,
-			info *callbacks.RunInfo,
-			input callbacks.CallbackInput) context.Context {
-			m.logger.Info("[INPUT]", "name", info.Name, "type", info.Type, "component", info.Component, "input", input)
-			return ctx
-		}).Build()
-}
-
-func (m *Models) GetEndCallback() callbacks.Handler {
-	return callbacks.NewHandlerBuilder().
-		OnStartFn(func(
-			ctx context.Context,
-			info *callbacks.RunInfo,
-			input callbacks.CallbackInput) context.Context {
-			m.logger.Info("[OUTPUT]", "name", info.Name, "type", info.Type, "component", info.Component, "input", input)
-			return ctx
-		}).Build()
+// This model is for the structured JSON output
+// Include the word "json" in the system or user prompt,
+// and provide an example of the desired JSON format to guide the model in outputting valid JSON.
+// https://api-docs.deepseek.com/guides/json_mode
+func (m *Models) CreateDeepseekFlashJSONModel(ctx context.Context) (*deepseek.ChatModel, error) {
+	deepseekFlashJSONOnce.Do(func() {
+		if m.apiKey.Deepseek == "" {
+			deepseekFlashJSONError = fmt.Errorf("DEEPSEEK_API_KEY is required for flash JSON model")
+			return
+		}
+		var err error
+		deepseekFlashJSONModel, err = deepseek.NewChatModel(ctx, &deepseek.ChatModelConfig{
+			APIKey:             m.apiKey.Deepseek,
+			BaseURL:            deepseekBaseURL,
+			Model:              deepseekFlashModelName,
+			ResponseFormatType: deepseek.ResponseFormatTypeJSONObject,
+		})
+		if err != nil {
+			deepseekFlashJSONError = fmt.Errorf("failed to start deepseek flash JSON model: %w", err)
+			return
+		}
+	})
+	return deepseekFlashJSONModel, deepseekFlashJSONError
 }

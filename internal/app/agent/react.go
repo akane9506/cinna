@@ -20,7 +20,11 @@ func NewCinnaReactAgent(ctx context.Context, config *app.Config, logger *slog.Lo
 	apiKey := &APIKey{
 		Deepseek: config.DeepseekAPIKey,
 	}
+	// create LLM models
 	models := NewLLMModels(apiKey, logger)
+	// load prompts
+	// prompts := prompt.LoadPromptFiles(logger)
+
 	chatModel, err := models.CreateDeepseekFlashModel(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to create cinna react agent: %w", err)
