@@ -26,13 +26,13 @@ func NewImMemoryStore() *InMemoryStore {
 }
 
 func (m *InMemoryStore) Append(userID int64, msg *schema.Message) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
 	// we don't store system message.
 	// because system message were inserted into the memory
 	if msg == nil || msg.Role == schema.System {
 		return
 	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	history := append(m.mem[userID], *msg)
 	if len(history) > m.maxLength {
 		history = history[len(history)-m.maxLength:]
@@ -42,7 +42,7 @@ func (m *InMemoryStore) Append(userID int64, msg *schema.Message) {
 
 func (m *InMemoryStore) Get(userID int64) []*schema.Message {
 	m.mu.RLock()
-	defer m.mu.RLock()
+	defer m.mu.RUnlock()
 
 	history := m.mem[userID]
 	output := make([]*schema.Message, 0, len(history))
