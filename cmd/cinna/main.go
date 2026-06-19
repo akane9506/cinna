@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/akane9506/cinna/internal/app"
+	"github.com/akane9506/cinna/internal/app/agent"
 	"github.com/akane9506/cinna/internal/app/ports"
 	"github.com/akane9506/cinna/internal/app/telegram"
 	db "github.com/akane9506/cinna/internal/postgres"
@@ -47,10 +48,18 @@ func main() {
 		AllowList: allowlistRepo,
 	}
 
+	// create an agent
+	agent, err := agent.NewCinnaReactAgent(ctx, config, logger)
+	if err != nil {
+		logger.Error("failed to create cinna agent", "error", err)
+		os.Exit(1)
+	}
+
 	// start telegram bot
 	tgClient, err := telegram.NewClient(
 		config.TelegramBotToken,
 		repos,
+		agent,
 		config.WebhookURL,
 		config.WebhookSecret,
 		logger,
