@@ -109,6 +109,11 @@ func (c *Client) handleUpdate(ctx context.Context, b *bot.Bot, update *models.Up
 			"user_id", update.Message.From.ID,
 			"error", err,
 		)
+		b.SendMessage(ctx, &bot.SendMessageParams{
+			ChatID: update.Message.Chat.ID,
+			Text:   "inter server error",
+		})
+		return
 	}
 	_, err = b.SendMessage(ctx, &bot.SendMessageParams{
 		ChatID: update.Message.Chat.ID,
