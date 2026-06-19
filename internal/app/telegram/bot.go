@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/akane9506/cinna/internal/app/ports"
 	"github.com/go-telegram/bot"
@@ -99,6 +100,7 @@ func (c *Client) handleUpdate(ctx context.Context, b *bot.Bot, update *models.Up
 	if update.Message == nil || update.Message.Text == "" {
 		return
 	}
+	typingDone := setTypingAction(ctx, b, update)
 	reply, err := c.agentHandler.HandleText(
 		ctx,
 		update.Message.From.ID,
@@ -113,6 +115,7 @@ func (c *Client) handleUpdate(ctx context.Context, b *bot.Bot, update *models.Up
 			ChatID: update.Message.Chat.ID,
 			Text:   "inter server error",
 		})
+		close(typingDone)
 		return
 	}
 	_, err = b.SendMessage(ctx, &bot.SendMessageParams{
@@ -126,4 +129,33 @@ func (c *Client) handleUpdate(ctx context.Context, b *bot.Bot, update *models.Up
 			"error", err,
 		)
 	}
+	close(typingDone)
+}
+
+// ========== helper functions =========
+func setTypingAction(ctx context.Context, b *bot.Bot, update *models.Update) chan struct{} {
+	typingDone := make(chan struct{})
+	go func() {
+		ticker := time.NewTicker(4 * time.Second)
+		defer ticker.Stop()
+
+		sendTyping := func() {
+			b.SendChatAction(ctx, &bot.SendChatActionParams{
+				ChatID: update.Message.Chat.ID,
+				Action: models.ChatActionTyping,
+			})
+		}
+		sendTyping()
+		for {
+			select {
+			case <-typingDone:
+				return
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				sendTyping()
+			}
+		}
+	}()
+	return typingDone
 }
