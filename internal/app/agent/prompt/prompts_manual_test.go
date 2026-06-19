@@ -4,13 +4,14 @@ import (
 	"log/slog"
 	"testing"
 
-	"github.com/akane9506/cinna/internal/utils"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestLoadPrompts(t *testing.T) {
-	utils.EnforceManualTest(t)
 	logger := slog.Default()
 	prompts := LoadPromptFiles(logger)
-	t.Log("Cinna Persona Prompt: ", prompts.CinnaPersona)
-	t.Log("Classification Prompt: ", prompts.IntentClassification)
+	assert.NotZero(t, len(prompts.CinnaPersona))
+	assert.Contains(t, prompts.CinnaPersona, "Cinna")
+	assert.NotZero(t, len(prompts.IntentClassification))
+	assert.Contains(t, prompts.IntentClassification, "SHOPPING")
 }
