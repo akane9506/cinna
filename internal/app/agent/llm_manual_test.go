@@ -8,6 +8,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/akane9506/cinna/internal/app"
 	"github.com/akane9506/cinna/internal/utils"
 	"github.com/cloudwego/eino/schema"
 )
@@ -59,6 +60,25 @@ EXAMPLE JSON OUTPUT:
 		t.Fatal(err)
 	}
 	t.Log(fmt.Sprintf("%+v", parsedResponse))
+}
+
+func TestCinnaChat(t *testing.T) {
+	utils.EnforceManualTest(t)
+	ctx := context.Background()
+	config, err := app.LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	agent, err := NewCinnaReactAgent(ctx, config, slog.Default())
+	runnable, err := agent.buildCinnaChatGraph(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	input := []*schema.Message{
+		&schema.Message{Role: schema.User, Content: "你好呀Cinna"},
+	}
+	result, err := runnable.Invoke(ctx, input)
+	t.Log(result.Content)
 }
 
 func setupDeepseekModelTesting(t *testing.T) (*Models, context.Context) {

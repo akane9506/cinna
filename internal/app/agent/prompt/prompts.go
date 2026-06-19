@@ -1,15 +1,21 @@
 package prompt
 
 import (
+	_ "embed"
 	"log/slog"
-	"os"
 	"strings"
 )
 
 const (
-	cinnaPersonaPath         = "./cinna_persona.md"
-	intentClassificationPath = "./intent_classification.md"
+	cinnaPersonaPath         = "cinna_persona.md"
+	intentClassificationPath = "intent_classification.md"
 )
+
+//go:embed cinna_persona.md
+var cinnaPersonaPrompt string
+
+//go:embed intent_classification.md
+var intentClassificationPrompt string
 
 type Prompts struct {
 	CinnaPersona         string
@@ -19,27 +25,19 @@ type Prompts struct {
 
 func LoadPromptFiles(logger *slog.Logger) *Prompts {
 	prompts := &Prompts{logger: logger}
-	cinnaPersonaPrompt := prompts.loadFile(cinnaPersonaPath)
-	intentClassificationPrompt := prompts.loadFile(intentClassificationPath)
+	cinnaPersonaPrompt := prompts.loadEmbeddedPrompt(cinnaPersonaPath, cinnaPersonaPrompt)
+	intentClassificationPrompt := prompts.loadEmbeddedPrompt(intentClassificationPath, intentClassificationPrompt)
 	prompts.CinnaPersona = cinnaPersonaPrompt
 	prompts.IntentClassification = intentClassificationPrompt
-	/*
-		maybe add fallback prompts here
-	*/
 	return prompts
 }
 
-// load prompt from a single file
-func (p *Prompts) loadFile(filepath string) string {
-	logger := p.logger.With("path", "internal/app/agent/prompt/prompts/LoadFile")
-	content, err := os.ReadFile(filepath)
-	if err != nil {
-		logger.Error("failed to load prompt file", "file", filepath, "error", err)
-		return ""
-	}
+// load embedded prompts
+func (p *Prompts) loadEmbeddedPrompt(filename string, content string) string {
+	logger := p.logger.With("path", "internal/app/agent/prompt/prompts/loadEmbeddedPrompts")
 	trimmedPrompt := strings.TrimSpace(string(content))
 	if trimmedPrompt == "" {
-		logger.Error("failed to prompt file is empty", "file", filepath)
+		logger.Error("the prompt file is empty", "file", filename)
 	}
 	return trimmedPrompt
 }

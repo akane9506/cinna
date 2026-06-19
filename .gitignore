@@ -22,6 +22,3 @@ coverage.*
 
 # Generated sql code
 sqlc/
-
-# Prompts
-internal/app/agent/prompt/*.md
