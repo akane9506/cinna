@@ -22,6 +22,7 @@ type CinnaReactAgent struct {
 	chatModel *deepseek.ChatModel
 	graph     *compose.Graph[[]*schema.Message, *schema.Message]
 	prompts   *prompt.Prompts
+	runner    compose.Runnable[[]*schema.Message, *schema.Message]
 	logger    *slog.Logger
 }
 
@@ -62,13 +63,37 @@ func NewCinnaReactAgent(
 		prompts:   prompts,
 		logger:    logger,
 	}
+	// compile graph and create a runner
+	runner, err := agent.CreateRunner(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create cinna agent runner: %w", err)
+	}
+	agent.runner = runner
 	return agent, nil
 }
 
-// ========= Build Graph ==========
+// ========= Handler =========
+func (a *CinnaReactAgent) HandleText(
+	ctx context.Context,
+	userID int64,
+	text string,
+) (string, error) {
+	logger := a.logger.With(
+		"path",
+		"internal/app/agent/cinna_graph/HandleText",
+	)
+	// will need to handle the chat history here
+	userMessage := schema.UserMessage(text)
+	result, err := a.runner.Invoke(ctx, []*schema.Message{userMessage})
+	if err != nil {
+		logger.Error("failed to get cinna response", "user_id", userID, "error", err)
+		return "", err
+	}
+	return result.Content, nil
+}
 
-// --------- Graphs for manual tests --------
-func (a *CinnaReactAgent) buildCinnaChatGraph(
+// ========= Build Graph ==========
+func (a *CinnaReactAgent) CreateRunner(
 	ctx context.Context) (compose.Runnable[[]*schema.Message, *schema.Message], error) {
 	graph := a.graph
 	a.AddCinnaResponseNode()
@@ -83,20 +108,6 @@ func (a *CinnaReactAgent) buildCinnaChatGraph(
 }
 
 // ========= Components ==========
-
-// Lambda
-
-// Cinna Prompt Injection
-// in: []*schema.Message | out: []*schema.Message
-// func (a *CinnaReactAgent) AddCinnaPromptInjectionLambda() {
-// 	a.graph.AddLambdaNode(
-// 		"inject_cinna_prompt",
-// 		injectSystemPrompt(a.prompts.CinnaPersona),
-// 	)
-// }
-
-// Chat Model Nodes
-
 // Cinna Chat Model
 // in: []*schema.Message | out: *schema.Message
 func (a *CinnaReactAgent) AddCinnaResponseNode() {
@@ -134,23 +145,20 @@ func (a *CinnaReactAgent) AddCinnaResponseNode() {
 	)
 }
 
-// ========== Helper functions ==========
-
-// // We've prepared different prompts for different ai models
-// func injectSystemPrompt(prompt string) *compose.Lambda {
-// 	return compose.InvokableLambda[[]*schema.Message, []*schema.Message](
-// 		func(ctx context.Context,
-// 			input []*schema.Message) (output []*schema.Message, err error) {
-// 			msgs := make([]*schema.Message, 0, len(input)+1)
-// 			msgs = append(msgs, schema.SystemMessage(prompt))
-// 			// Keep all non-system message from input
-// 			for _, msg := range input {
-// 				if msg == nil || msg.Role == schema.System {
-// 					continue
-// 				}
-// 				msgs = append(msgs, msg)
-// 			}
-// 			return msgs, nil
-// 		},
-// 	)
-// }
+// ========== Manual Tests [DO NOT USE IN PRODUCTION] ==========
+func (a *CinnaReactAgent) buildCinnaChatGraph(
+	ctx context.Context) (compose.Runnable[[]*schema.Message, *schema.Message], error) {
+	if a.runner != nil {
+		return nil, fmt.Errorf("this is only for manual test, do not use it in production")
+	}
+	graph := a.graph
+	a.AddCinnaResponseNode()
+	graph.AddEdge(compose.START, cinnaChatNodeName)
+	graph.AddEdge(cinnaChatNodeName, compose.END)
+	runnable, err := graph.Compile(ctx)
+	if err != nil {
+		a.logger.Error("failed to run manual cinna chat graph", "error", err)
+		return nil, err
+	}
+	return runnable, nil
+}
