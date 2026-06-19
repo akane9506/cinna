@@ -69,7 +69,7 @@ func TestCinnaChat(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	agent, err := NewCinnaReactAgent(ctx, config, slog.Default())
+	agent, err := initializeBaseAgent(ctx, config, slog.Default())
 	runnable, err := agent.buildCinnaChatGraph(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -79,6 +79,13 @@ func TestCinnaChat(t *testing.T) {
 	}
 	result, err := runnable.Invoke(ctx, input)
 	t.Log(result.Content)
+	t.Log("completion tokens: ",
+		result.ResponseMeta.Usage.CompletionTokens,
+		"cache miss tokens: ",
+		result.ResponseMeta.Usage.PromptTokens-result.ResponseMeta.Usage.PromptTokenDetails.CachedTokens,
+		"cache hit tokens: ",
+		result.ResponseMeta.Usage.PromptTokenDetails.CachedTokens,
+	)
 }
 
 func setupDeepseekModelTesting(t *testing.T) (*Models, context.Context) {
