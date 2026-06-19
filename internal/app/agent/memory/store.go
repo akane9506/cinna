@@ -1,10 +1,15 @@
 package memory
 
-import "github.com/cloudwego/eino/schema"
+import (
+	"sync"
+
+	"github.com/cloudwego/eino/schema"
+)
 
 const defaultMaxLength = 50
 
 type InMemoryStore struct {
+	mu        sync.RWMutex
 	mem       map[int64][]schema.Message
 	maxLength int
 }
@@ -21,6 +26,8 @@ func NewImMemoryStore() *InMemoryStore {
 }
 
 func (m *InMemoryStore) Append(userID int64, msg *schema.Message) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	// we don't store system message.
 	// because system message were inserted into the memory
 	if msg == nil || msg.Role == schema.System {
@@ -34,6 +41,9 @@ func (m *InMemoryStore) Append(userID int64, msg *schema.Message) {
 }
 
 func (m *InMemoryStore) Get(userID int64) []*schema.Message {
+	m.mu.RLock()
+	defer m.mu.RLock()
+
 	history := m.mem[userID]
 	output := make([]*schema.Message, 0, len(history))
 	for _, msg := range history {
