@@ -1,6 +1,8 @@
 # Cinna
 
-A Telegram assistant written in Go.
+Cinna is a Telegram assistant written in Go. It uses PostgreSQL for access
+control, an Eino chat graph for responses, DeepSeek as the chat model, and
+short-term in-memory chat history per Telegram user.
 
 ## Requirements
 
@@ -8,8 +10,9 @@ A Telegram assistant written in Go.
 - Docker
 - `sqlc`
 - A Telegram bot token
+- A DeepSeek API key
 
-## Setup
+## Configuration
 
 Create and configure the local environment:
 
@@ -17,12 +20,24 @@ Create and configure the local environment:
 cp .env.example .env
 ```
 
-Edit `.env` before loading it. At minimum, set:
+Edit `.env` before loading it. For local development, set at least:
 
 ```dotenv
 GO_ENV=development
 TELEGRAM_BOT_TOKEN=your_telegram_bot_token
-ALLOWED_ADMIN_USERS=12345678,87654321
+DATABASE_URL=postgres://cinna:change_me@localhost:5432/cinna?sslmode=disable
+DEEPSEEK_API_KEY=your_deepseek_api_key
+POSTGRES_USER=cinna
+POSTGRES_PASSWORD=change_me
+POSTGRES_DB=cinna
+```
+
+Production webhook mode also requires:
+
+```dotenv
+GO_ENV=production
+WEBHOOK_URL=https://your-public-host.example
+WEBHOOK_SECRET=your_webhook_secret
 ```
 
 Load the environment:
@@ -32,6 +47,8 @@ set -a
 source .env
 set +a
 ```
+
+## Database Setup
 
 Start PostgreSQL:
 
@@ -58,7 +75,7 @@ docker compose exec -T postgres \
   psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" < db/schema.sql
 ```
 
-Validate that the table was created:
+Validate that the allow-list table exists:
 
 ```bash
 docker compose exec postgres \
@@ -72,19 +89,18 @@ Generate Go code from the SQL queries:
 sqlc generate
 ```
 
-Run Cinna:
+## Telegram Allow List
 
-```bash
-go run ./cmd/cinna
-```
-
-## SQL Commands
-
-Open a PostgreSQL shell:
+Cinna checks every Telegram update against the `allowed_users` table. Add or
+reactivate a user before messaging the bot:
 
 ```bash
 docker compose exec postgres \
-  psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+  psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
+  -c "INSERT INTO allowed_users (telegram_user_id, role)
+      VALUES (12345678, 'admin')
+      ON CONFLICT (telegram_user_id) DO UPDATE
+      SET role = EXCLUDED.role, is_active = TRUE, updated_at = NOW();"
 ```
 
 List allowed users:
@@ -95,15 +111,40 @@ docker compose exec postgres \
   -c "SELECT * FROM allowed_users ORDER BY updated_at;"
 ```
 
-Add or reactivate an allowed user:
+## Run
+
+Run Cinna locally with Telegram long polling:
+
+```bash
+go run ./cmd/cinna
+```
+
+In production mode, Cinna configures the Telegram webhook, starts the webhook
+receiver, and serves it on `PORT` or `8080`.
+
+## Agent
+
+The current agent path is:
+
+```text
+Telegram message
+  -> allow-list middleware
+  -> Cinna Eino graph
+  -> DeepSeek chat model
+  -> Telegram response
+```
+
+The agent injects the Cinna persona prompt from `internal/app/agent/prompt/`,
+stores non-system messages in an in-memory per-user history, and sends typing
+actions while it waits for a response.
+
+## SQL Commands
+
+Open a PostgreSQL shell:
 
 ```bash
 docker compose exec postgres \
-  psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
-  -c "INSERT INTO allowed_users (telegram_user_id, role)
-      VALUES (12345678, 'admin')
-      ON CONFLICT (telegram_user_id) DO UPDATE
-      SET role = EXCLUDED.role, is_active = TRUE, updated_at = NOW();"
+  psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"
 ```
 
 Regenerate code after changing `db/schema.sql` or files under `db/queries/`:
@@ -131,6 +172,33 @@ go test ./...
 go vet ./...
 ```
 
+## Manual LLM Tests
+
+Manual model and agent tests are guarded by `internal/utils.EnforceManualTest`.
+They are skipped unless `RUN_MANUAL_TEST=1` is set, and they require
+`DEEPSEEK_API_KEY`.
+
+Run the DeepSeek model checks:
+
+```bash
+RUN_MANUAL_TEST=1 go test ./internal/app/agent \
+  -run 'TestDeepseekFlash(Model|JSON)Manual' -v
+```
+
+Run the Cinna agent chat graph check:
+
+```bash
+RUN_MANUAL_TEST=1 go test ./internal/app/agent \
+  -run TestCinnaChat -v
+```
+
+If you already loaded `.env`, make sure it includes:
+
+```dotenv
+DEEPSEEK_API_KEY=your_deepseek_api_key
+RUN_MANUAL_TEST=1
+```
+
 ## Project Structure
 
 ```text
@@ -142,9 +210,12 @@ cinna/
 │   └── schema.sql
 ├── internal/
 │   ├── app/
+│   │   ├── agent/
+│   │   ├── ports/
 │   │   └── telegram/
-│   └── postygres/
-│       └── sqlc/
+│   ├── postgres/
+│   │   └── sqlc/
+│   └── utils/
 ├── prompts/
 │   ├── core/
 │   └── shopping/
