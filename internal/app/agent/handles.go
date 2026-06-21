@@ -1,0 +1,31 @@
+package agent
+
+import (
+	"context"
+
+	"github.com/cloudwego/eino/schema"
+)
+
+func (a *CinnaReactAgent) HandleText(
+	ctx context.Context,
+	userID int64,
+	text string,
+) (string, error) {
+	logger := a.logger.With(
+		"path",
+		"internal/app/agent/cinna_graph/HandleText",
+	)
+	// concat in-memory message history and the most recent user message
+	userMessage := schema.UserMessage(text)
+	messages := a.store.Get(userID)
+	messages = append(messages, userMessage)
+
+	result, err := a.runner.Invoke(ctx, messages)
+	if err != nil {
+		logger.Error("failed to get cinna response", "user_id", userID, "error", err)
+		return "", err
+	}
+	a.store.Append(userID, userMessage)
+	a.store.Append(userID, result)
+	return result.Content, nil
+}

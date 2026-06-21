@@ -88,6 +88,42 @@ func TestCinnaChat(t *testing.T) {
 	)
 }
 
+func TestIntentClassification(t *testing.T) {
+	utils.EnforceManualTest(t)
+	ctx := context.Background()
+	config, err := app.LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	agent, err := initializeBaseAgent(ctx, config, slog.Default())
+	runnable, err := agent.buildIntentJSONGraph(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// single message
+	input := []*schema.Message{
+		&schema.Message{Role: schema.User, Content: "可以帮我把五花肉和铅笔加到购物车吗?"},
+	}
+	result, err := runnable.Invoke(ctx, input)
+	t.Log("single SHOPPING intent: ", result.Content)
+
+	// chat history
+	input = []*schema.Message{
+		&schema.Message{Role: schema.Assistant, Content: "做蛋糕需要用到面粉和糖?"},
+		&schema.Message{Role: schema.User, Content: "可以帮我把这些记下吗？"},
+	}
+	result, err = runnable.Invoke(ctx, input)
+	t.Log("chat history with SHOPPING intent: ", result.Content)
+
+	// other
+	input = []*schema.Message{
+		&schema.Message{Role: schema.User, Content: "拍摄模型车需要用到什么设备呀？"},
+	}
+	result, err = runnable.Invoke(ctx, input)
+	t.Log("single OTHER intent: ", result.Content)
+}
+
 func setupDeepseekModelTesting(t *testing.T) (*Models, context.Context) {
 	utils.EnforceManualTest(t)
 	apiKey := os.Getenv("DEEPSEEK_API_KEY")
