@@ -10,27 +10,24 @@ short-term in-memory chat history per Telegram user.
 flowchart LR
     Start([START]) --> IntentClassifier["Intent Classification<br/><br/>Classifies user intention and possible action<br/><br/>In: schema.Message[]<br/>Out: schema.Message"]
 
-    IntentClassifier --> IntentLambda["Intent Validation Lambda<br/><br/>Validates intent classification output<br/>and prepares routing information<br/><br/>In: schema.Message<br/>Out: schema.Message[]"]
+    IntentClassifier --> IntentLambda["Intent Validation Lambda<br/><br/>Validates intent classification node output<br/>and feeds intention to output branching<br/><br/>In: schema.Message<br/>Out: schema.Message[]"]
 
     IntentLambda --> IntentRouter{"Branch by Intent<br/><br/>Intent:<br/>SHOPPING | FEEDBACK | OTHER"}
 
-    IntentRouter -- SHOPPING --> ListLambda["List Lambda<br/><br/>Lists contents from the shopping list table<br/><br/>Notes:<br/>1. List expired items<br/>2. Items include categories<br/>3. Notify Cinna to respond with the corresponding category<br/><br/>In: schema.Message[]<br/>Out: schema.Message[]"]
+    IntentRouter -- SHOPPING --> ListLambda["List Lambda<br/><br/>Lists contents in the shopping list table<br/><br/>Note:<br/>1. List expired items<br/>2. Items include categories<br/>3. Notify Cinna to respond with the corresponding category<br/><br/>In: schema.Message[]<br/>Out: schema.Message[]"]
 
-    ListLambda --> ActionRouter{"Branch by Action Type<br/><br/>Action:<br/>LIST | UPDATE | NONE"}
+    ListLambda --> ActionRouter{"Branch by Action Type<br/><br/>Action:<br/>LIST | UPDATE | None"}
 
-    ActionRouter -- UPDATE --> ShoppingPlanner["Shopping Planner<br/><br/>Reads user-Cinna chat history<br/>and decides the Shopping DB operation<br/><br/>In: schema.Message[]<br/>Out: schema.Message"]
+    ActionRouter -- UPDATE --> ShoppingPlanner["ShoppingPlanner<br/><br/>Reads user-Cinna chat history<br/>and decides the Shopping DB operation<br/><br/>In: schema.Message[]<br/>Out: schema.Message"]
 
-    ActionRouter -- LIST --> ListMessageLambda["List Message Lambda<br/><br/>Injects prompt instructions so Cinna only includes the content the user requested<br/>and notifies the user when some items are expired<br/><br/>In: schema.Message[]<br/>Out: schema.Message[]"]
+    ActionRouter -- LIST --> ListMessageLambda["List Message Lambda<br/><br/>Injects prompt to tell Cinna to only include the content the user needs<br/>and notify the user that some items are expired"]
 
-    ActionRouter -- NONE --> CinnaReply["Cinna Reply"]
-
-    ListMessageLambda --> CinnaReply
+    ListMessageLambda --> CinnaReply["CinnaReply"]
 
     ShoppingPlanner --> ShoppingOutput["Shopping JSON<br/><br/>{<br/>category: string<br/>action: string<br/>item: string<br/>}"]
 
     ShoppingOutput --> CinnaReply
 
-    IntentRouter -- FEEDBACK --> CinnaReply
     IntentRouter -- OTHER --> CinnaReply
 
     CinnaReply --> End([END])
