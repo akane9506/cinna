@@ -11,8 +11,12 @@ import (
 func (a *CinnaReactAgent) BuildGraph(
 	ctx context.Context) (compose.Runnable[[]*schema.Message, *schema.Message], error) {
 	graph := a.graph
+	a.AddIntentClassificationNodes()
+	a.AddIntentOutputLambdaNode()
 	a.AddCinnaResponseNode()
-	graph.AddEdge(compose.START, cinnaChatNodeName)
+	graph.AddEdge(compose.START, intentLLMNodeName)
+	graph.AddEdge(intentLLMNodeName, intentLambdaNodeName)
+	a.AddIntentBranch()
 	graph.AddEdge(cinnaChatNodeName, compose.END)
 	runnable, err := graph.Compile(ctx)
 	if err != nil {
