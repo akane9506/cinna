@@ -2,7 +2,9 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/cloudwego/eino/compose"
 	"github.com/cloudwego/eino/schema"
@@ -12,6 +14,22 @@ const (
 	intentLLMNodeName    = "intent_classification"
 	intentLambdaNodeName = "intent_validation"
 	cinnaChatNodeName    = "cinna_response"
+)
+
+type Intention struct {
+	Intent string `json:"intent"`
+}
+
+type IntentLambdaOutput struct {
+	Intent   string
+	Messages []*schema.Message
+}
+
+const (
+	IntentOther    string = "OTHER"
+	IntentShopping string = "SHOPPING"
+	IntentFeedback string = "FEEDBACK"
+	IntentFailed   string = "FAILED"
 )
 
 //	========== Intent classifier ==========
@@ -33,18 +51,59 @@ func (a *CinnaReactAgent) AddIntentClassificationNodes() {
 	)
 }
 
-// will work on this one next
+// The lambda node helps parse the output from the intent classification, and cleans the history messages
+// IMPORTANT: we don't need to include the intention classification output in this lambda
+// in: *schema.Message | out: *IntentLambdaOutput
 func (a *CinnaReactAgent) AddIntentOutputLambdaNode() {
 	a.graph.AddLambdaNode(
 		intentLambdaNodeName,
-		compose.InvokableLambda[*schema.Message, []*schema.Message](func(
+		compose.InvokableLambda[*schema.Message, *IntentLambdaOutput](func(
 			ctx context.Context,
 			msg *schema.Message,
-		) ([]*schema.Message, error) {
-
-			return nil, nil
+		) (*IntentLambdaOutput, error) {
+			logger := a.logger.With("Node", intentLambdaNodeName)
+			if msg == nil {
+				// we do not pause the agent flow even if there is an data-related error
+				logger.Error("failed to get message", "error", "nil input")
+				return &IntentLambdaOutput{
+					Intent: IntentFailed,
+				}, nil
+			}
+			var intent Intention
+			if err := json.Unmarshal([]byte(msg.Content), &intent); err != nil {
+				logger.Error(
+					"failed to parse intent message",
+					"error", "failed to parse message", "content", msg.Content)
+				intent.Intent = IntentFailed
+			}
+			return &IntentLambdaOutput{
+				Intent: normalizeIntent(intent.Intent),
+			}, nil
 		}),
+		compose.WithStatePostHandler(
+			func(
+				ctx context.Context,
+				output *IntentLambdaOutput,
+				state *HistoryMessage) (*IntentLambdaOutput, error) {
+				msgs := cleanupOutputMessage(state.History)
+				if output.Intent == IntentFailed {
+					// if parse failed, we also notify user that the parse failed, please contact bot service
+					msgs = append(msgs, &schema.Message{
+						Role:    schema.Assistant,
+						Content: a.prompts.IntentFailedRecovery})
+				}
+				state.History = msgs
+				output.Messages = state.History
+				return output, nil
+			},
+		),
 	)
+}
+
+// this node goes after the intent classification branch; it removes the intent
+// but preserves (outputs) the []*schema.Message
+func (a *CinnaReactAgent) AddIntentCleanupLambdaNode() {
+
 }
 
 // ========== Cinna Chat Model ==========
@@ -90,4 +149,27 @@ func organizeInputMessage(input []*schema.Message, systemPrompt string) []*schem
 		}
 	}
 	return msgs
+}
+
+// exclude unnecessary messages from the collection of message
+func cleanupOutputMessage(output []*schema.Message) []*schema.Message {
+	msgs := []*schema.Message{}
+	for _, msg := range output {
+		if msg.Role == schema.System {
+			continue
+		}
+		msgs = append(msgs, msg)
+	}
+	return msgs
+}
+
+// normalize the parsed intent
+func normalizeIntent(raw string) string {
+	raw = strings.ToUpper(raw)
+	switch raw {
+	case IntentShopping, IntentFeedback, IntentOther:
+		return raw
+	default:
+		return IntentFailed
+	}
 }

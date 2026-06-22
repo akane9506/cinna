@@ -10,6 +10,7 @@ import (
 
 	"github.com/akane9506/cinna/internal/app"
 	"github.com/akane9506/cinna/internal/utils"
+	"github.com/cloudwego/eino/compose"
 	"github.com/cloudwego/eino/schema"
 )
 
@@ -88,7 +89,7 @@ func TestCinnaChat(t *testing.T) {
 	)
 }
 
-func TestIntentClassification(t *testing.T) {
+func TestIntentLambda(t *testing.T) {
 	utils.EnforceManualTest(t)
 	ctx := context.Background()
 	config, err := app.LoadConfig()
@@ -96,32 +97,31 @@ func TestIntentClassification(t *testing.T) {
 		t.Fatal(err)
 	}
 	agent, err := initializeBaseAgent(ctx, config, slog.Default())
-	runnable, err := agent.buildIntentJSONGraph(ctx)
+	runnable, err := agent.buildIntentLambdaOutputNode(ctx, t)
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	// single message
+	t.Log("======== Normal intention lambda testing ========")
 	input := []*schema.Message{
-		&schema.Message{Role: schema.User, Content: "可以帮我把五花肉和铅笔加到购物车吗?"},
-	}
-	result, err := runnable.Invoke(ctx, input)
-	t.Log("single SHOPPING intent: ", result.Content)
-
-	// chat history
-	input = []*schema.Message{
-		&schema.Message{Role: schema.Assistant, Content: "做蛋糕需要用到面粉和糖?"},
+		&schema.Message{Role: schema.Assistant, Content: "做蛋糕需要用到面粉和糖"},
 		&schema.Message{Role: schema.User, Content: "可以帮我把这些记下吗？"},
 	}
-	result, err = runnable.Invoke(ctx, input)
-	t.Log("chat history with SHOPPING intent: ", result.Content)
-
-	// other
+	_, err = runnable.Invoke(ctx, input)
+	t.Log("======== Other intention lambda testing ========")
+	input = []*schema.Message{
+		&schema.Message{Role: schema.User, Content: ""},
+	}
+	_, err = runnable.Invoke(ctx, input)
+	t.Log("======== Other intention lambda testing ========")
 	input = []*schema.Message{
 		&schema.Message{Role: schema.User, Content: "拍摄模型车需要用到什么设备呀？"},
 	}
-	result, err = runnable.Invoke(ctx, input)
-	t.Log("single OTHER intent: ", result.Content)
+	_, err = runnable.Invoke(ctx, input)
+	t.Log("======== Feedback intention lambda testing ========")
+	input = []*schema.Message{
+		&schema.Message{Role: schema.User, Content: "Cinna目前的回复速度好慢呀？"},
+	}
+	_, err = runnable.Invoke(ctx, input)
 }
 
 func setupDeepseekModelTesting(t *testing.T) (*Models, context.Context) {
@@ -135,4 +135,52 @@ func setupDeepseekModelTesting(t *testing.T) (*Models, context.Context) {
 		Deepseek: apiKey,
 	}, slog.Default())
 	return models, ctx
+}
+
+// ========== Graph-Building For Manual Tests [DO NOT USE IN PRODUCTION] ==========
+func (a *CinnaReactAgent) buildCinnaChatGraph(
+	ctx context.Context) (compose.Runnable[[]*schema.Message, *schema.Message], error) {
+	if a.runner != nil {
+		return nil, fmt.Errorf("this is only for manual test, do not use it in production")
+	}
+	graph := a.graph
+	a.AddCinnaResponseNode()
+	graph.AddEdge(compose.START, cinnaChatNodeName)
+	graph.AddEdge(cinnaChatNodeName, compose.END)
+	runnable, err := graph.Compile(ctx)
+	if err != nil {
+		a.logger.Error("failed to compile manual cinna chat graph", "error", err)
+		return nil, err
+	}
+	return runnable, nil
+}
+
+func (a *CinnaReactAgent) buildIntentLambdaOutputNode(
+	ctx context.Context, t *testing.T) (compose.Runnable[[]*schema.Message, *schema.Message], error) {
+	if a.runner != nil {
+		return nil, fmt.Errorf("this is only for manual test, do not use it in production")
+	}
+	// add a test-purposed node to make the test graph type compatible with the
+	// agent's I/O type
+	graph := a.graph
+	a.AddIntentClassificationNodes()
+	a.AddIntentOutputLambdaNode()
+	graph.AddLambdaNode("mock_final_output",
+		compose.InvokableLambda[*IntentLambdaOutput, *schema.Message](func(
+			ctx context.Context, input *IntentLambdaOutput) (*schema.Message, error) {
+			t.Log("Intent: ", input.Intent)
+			t.Log("Messages: ", input.Messages)
+			return input.Messages[len(input.Messages)-1], nil
+		}),
+	)
+	graph.AddEdge(compose.START, intentLLMNodeName)
+	graph.AddEdge(intentLLMNodeName, intentLambdaNodeName)
+	graph.AddEdge(intentLambdaNodeName, "mock_final_output")
+	graph.AddEdge("mock_final_output", compose.END)
+	runnable, err := graph.Compile(ctx)
+	if err != nil {
+		a.logger.Error("failed to compile manual intent lambda graph", "error", err)
+		return nil, err
+	}
+	return runnable, nil
 }
