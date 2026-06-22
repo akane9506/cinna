@@ -101,10 +101,15 @@ func TestIntentLambda(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Log("======== Normal intention lambda testing ========")
+	t.Log("======== Shopping intention lambda testing 1 ========")
 	input := []*schema.Message{
 		&schema.Message{Role: schema.Assistant, Content: "做蛋糕需要用到面粉和糖"},
 		&schema.Message{Role: schema.User, Content: "可以帮我把这些记下吗？"},
+	}
+	_, err = runnable.Invoke(ctx, input)
+	t.Log("======== Shopping intention lambda testing 2 ========")
+	input = []*schema.Message{
+		&schema.Message{Role: schema.User, Content: "可以看一下我都要买什么吗？"},
 	}
 	_, err = runnable.Invoke(ctx, input)
 	t.Log("======== Other intention lambda testing ========")
@@ -173,6 +178,7 @@ func (a *CinnaReactAgent) buildIntentLambdaOutputNode(
 				state *HistoryMessage,
 			) error {
 				t.Log("Intent: ", state.ChatIntent)
+				t.Log("Action: ", state.ActionType)
 				t.Log("Messages: ", state.History)
 				return nil
 			})

@@ -18,13 +18,20 @@ const (
 
 type Intention struct {
 	Intent string `json:"intent"`
+	Action string `json:"action"`
 }
 
 const (
+	// For intent classification
 	IntentOther    string = "OTHER"
 	IntentShopping string = "SHOPPING"
 	IntentFeedback string = "FEEDBACK"
 	IntentFailed   string = "FAILED"
+
+	// for action classification
+	ActionList   string = "LIST"
+	ActionUpdate string = "UPDATE"
+	ActionNone   string = "NONE"
 )
 
 // ========== Cinna Chat Model ==========
@@ -80,6 +87,7 @@ func (a *CinnaReactAgent) processIntentOutput(
 	ctx context.Context, msg *schema.Message) ([]*schema.Message, error) {
 	logger := a.logger.With("Node", intentLambdaNodeName)
 	intentValue := IntentFailed
+	actionValue := ActionNone
 	if msg == nil {
 		// we do not pause the agent flow even if there is an data-related error
 		logger.Error("failed to get message", "error", "nil input")
@@ -91,12 +99,14 @@ func (a *CinnaReactAgent) processIntentOutput(
 				"error", "failed to parse message", "content", msg.Content)
 		} else {
 			intentValue = normalizeIntent(intent.Intent)
+			actionValue = normalizeAction(intent.Action)
 		}
 	}
 	var output []*schema.Message
 	compose.ProcessState[*HistoryMessage](
 		ctx, func(ctx context.Context, state *HistoryMessage) error {
 			state.ChatIntent = intentValue
+			state.ActionType = actionValue
 			msgs := cleanupOutputMessage(state.History)
 			if intentValue == IntentFailed {
 				// if parse failed, we also notify user that the parse failed, please contact bot service
@@ -112,6 +122,29 @@ func (a *CinnaReactAgent) processIntentOutput(
 }
 
 // ========== Intent Branch ==========
+// route the task to different branch based on the classified intent
+func (a *CinnaReactAgent) AddIntentBranch() {
+	endNodes := map[string]bool{}
+	endNodes[cinnaChatNodeName] = true
+	a.graph.AddBranch(intentLambdaNodeName, compose.NewGraphBranch(a.intentBranch, endNodes))
+}
+
+func (a *CinnaReactAgent) intentBranch(ctx context.Context, out []*schema.Message) (string, error) {
+	var next string
+	compose.ProcessState[*HistoryMessage](
+		ctx, func(ctx context.Context, state *HistoryMessage) error {
+			switch state.ChatIntent {
+			case IntentShopping:
+				next = cinnaChatNodeName // we just put this as a place holder
+			case IntentOther:
+				next = cinnaChatNodeName
+			default:
+				next = cinnaChatNodeName
+			}
+			return nil
+		})
+	return next, nil
+}
 
 // ========== Helper functions ==========
 
@@ -159,5 +192,16 @@ func normalizeIntent(raw string) string {
 		return raw
 	default:
 		return IntentFailed
+	}
+}
+
+// normalize the parsed action type
+func normalizeAction(raw string) string {
+	raw = strings.ToUpper(raw)
+	switch raw {
+	case ActionList, ActionUpdate, ActionNone:
+		return raw
+	default:
+		return ActionNone
 	}
 }
