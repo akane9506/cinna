@@ -27,23 +27,43 @@ const (
 	IntentFailed   string = "FAILED"
 )
 
+// ========== Cinna Chat Model ==========
+//
+// The last llm node in the graph, generates user-facing response
+// in: []*schema.Message | out: *[]schema.Message
+func (a *CinnaReactAgent) AddCinnaResponseNode() {
+	a.graph.AddChatModelNode(cinnaChatNodeName, a.chatModel,
+		compose.WithStatePreHandler(a.prepareForCinnaChat))
+}
+
+func (a *CinnaReactAgent) prepareForCinnaChat(
+	ctx context.Context,
+	input []*schema.Message,
+	state *HistoryMessage) ([]*schema.Message, error) {
+	msgs := organizeInputMessage(input, a.prompts.CinnaPersona)
+	state.SystemMessage = a.prompts.CinnaPersona
+	state.History = msgs
+	return msgs, nil
+}
+
 //	========== Intent classifier ==========
 //
 // The first node in the graph, classifies the user's intention to decide the next step
 // in: []*schema.Message | out: *schema.Message
 func (a *CinnaReactAgent) AddIntentClassificationNodes() {
 	a.graph.AddChatModelNode(intentLLMNodeName, a.jsonModel,
-		compose.WithStatePreHandler(
-			func(
-				ctx context.Context,
-				input []*schema.Message,
-				state *HistoryMessage) ([]*schema.Message, error) {
-				msgs := organizeInputMessage(input, a.prompts.IntentClassification)
-				state.SystemMessage = a.prompts.IntentClassification
-				state.History = msgs
-				return msgs, nil
-			}),
+		compose.WithStatePreHandler(a.prepareForIntentClassification),
 	)
+}
+
+func (a *CinnaReactAgent) prepareForIntentClassification(
+	ctx context.Context,
+	input []*schema.Message,
+	state *HistoryMessage) ([]*schema.Message, error) {
+	msgs := organizeInputMessage(input, a.prompts.IntentClassification)
+	state.SystemMessage = a.prompts.IntentClassification
+	state.History = msgs
+	return msgs, nil
 }
 
 // The lambda node helps parse the output from the intent classification, and cleans the history messages
@@ -52,63 +72,46 @@ func (a *CinnaReactAgent) AddIntentClassificationNodes() {
 func (a *CinnaReactAgent) AddIntentOutputLambdaNode() {
 	a.graph.AddLambdaNode(
 		intentLambdaNodeName,
-		compose.InvokableLambda[*schema.Message, []*schema.Message](func(
-			ctx context.Context,
-			msg *schema.Message,
-		) ([]*schema.Message, error) {
-			logger := a.logger.With("Node", intentLambdaNodeName)
-			intentValue := IntentFailed
-			if msg == nil {
-				// we do not pause the agent flow even if there is an data-related error
-				logger.Error("failed to get message", "error", "nil input")
-			} else {
-				var intent Intention
-				if err := json.Unmarshal([]byte(msg.Content), &intent); err != nil {
-					logger.Error(
-						"failed to parse intent message",
-						"error", "failed to parse message", "content", msg.Content)
-				} else {
-					intentValue = normalizeIntent(intent.Intent)
-				}
-			}
-			var output []*schema.Message
-			compose.ProcessState[*HistoryMessage](
-				ctx, func(ctx context.Context, state *HistoryMessage) error {
-					state.ChatIntent = intentValue
-					msgs := cleanupOutputMessage(state.History)
-					if intentValue == IntentFailed {
-						// if parse failed, we also notify user that the parse failed, please contact bot service
-						msgs = append(msgs, &schema.Message{
-							Role:    schema.Assistant,
-							Content: a.prompts.IntentFailedRecovery})
-					}
-					state.History = msgs
-					output = msgs
-					return nil
-				})
-			return output, nil
-		}),
+		compose.InvokableLambda[*schema.Message, []*schema.Message](a.processIntentOutput),
 	)
 }
 
-// ========== Cinna Chat Model ==========
-//
-// The last llm node in the graph, generates user-facing response
-// in: []*schema.Message | out: *[]schema.Message
-func (a *CinnaReactAgent) AddCinnaResponseNode() {
-	a.graph.AddChatModelNode(cinnaChatNodeName, a.chatModel,
-		compose.WithStatePreHandler(
-			func(
-				ctx context.Context,
-				input []*schema.Message,
-				state *HistoryMessage) ([]*schema.Message, error) {
-				msgs := organizeInputMessage(input, a.prompts.CinnaPersona)
-				state.SystemMessage = a.prompts.CinnaPersona
-				state.History = msgs
-				return msgs, nil
-			}),
-	)
+func (a *CinnaReactAgent) processIntentOutput(
+	ctx context.Context, msg *schema.Message) ([]*schema.Message, error) {
+	logger := a.logger.With("Node", intentLambdaNodeName)
+	intentValue := IntentFailed
+	if msg == nil {
+		// we do not pause the agent flow even if there is an data-related error
+		logger.Error("failed to get message", "error", "nil input")
+	} else {
+		var intent Intention
+		if err := json.Unmarshal([]byte(msg.Content), &intent); err != nil {
+			logger.Error(
+				"failed to parse intent message",
+				"error", "failed to parse message", "content", msg.Content)
+		} else {
+			intentValue = normalizeIntent(intent.Intent)
+		}
+	}
+	var output []*schema.Message
+	compose.ProcessState[*HistoryMessage](
+		ctx, func(ctx context.Context, state *HistoryMessage) error {
+			state.ChatIntent = intentValue
+			msgs := cleanupOutputMessage(state.History)
+			if intentValue == IntentFailed {
+				// if parse failed, we also notify user that the parse failed, please contact bot service
+				msgs = append(msgs, &schema.Message{
+					Role:    schema.Assistant,
+					Content: a.prompts.IntentFailedRecovery})
+			}
+			state.History = msgs
+			output = msgs
+			return nil
+		})
+	return output, nil
 }
+
+// ========== Intent Branch ==========
 
 // ========== Helper functions ==========
 
