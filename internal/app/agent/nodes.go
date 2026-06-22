@@ -20,11 +20,6 @@ type Intention struct {
 	Intent string `json:"intent"`
 }
 
-type IntentLambdaOutput struct {
-	Intent   string
-	Messages []*schema.Message
-}
-
 const (
 	IntentOther    string = "OTHER"
 	IntentShopping string = "SHOPPING"
@@ -57,53 +52,43 @@ func (a *CinnaReactAgent) AddIntentClassificationNodes() {
 func (a *CinnaReactAgent) AddIntentOutputLambdaNode() {
 	a.graph.AddLambdaNode(
 		intentLambdaNodeName,
-		compose.InvokableLambda[*schema.Message, *IntentLambdaOutput](func(
+		compose.InvokableLambda[*schema.Message, []*schema.Message](func(
 			ctx context.Context,
 			msg *schema.Message,
-		) (*IntentLambdaOutput, error) {
+		) ([]*schema.Message, error) {
 			logger := a.logger.With("Node", intentLambdaNodeName)
+			intentValue := IntentFailed
 			if msg == nil {
 				// we do not pause the agent flow even if there is an data-related error
 				logger.Error("failed to get message", "error", "nil input")
-				return &IntentLambdaOutput{
-					Intent: IntentFailed,
-				}, nil
-			}
-			var intent Intention
-			if err := json.Unmarshal([]byte(msg.Content), &intent); err != nil {
-				logger.Error(
-					"failed to parse intent message",
-					"error", "failed to parse message", "content", msg.Content)
-				intent.Intent = IntentFailed
-			}
-			return &IntentLambdaOutput{
-				Intent: normalizeIntent(intent.Intent),
-			}, nil
-		}),
-		compose.WithStatePostHandler(
-			func(
-				ctx context.Context,
-				output *IntentLambdaOutput,
-				state *HistoryMessage) (*IntentLambdaOutput, error) {
-				msgs := cleanupOutputMessage(state.History)
-				if output.Intent == IntentFailed {
-					// if parse failed, we also notify user that the parse failed, please contact bot service
-					msgs = append(msgs, &schema.Message{
-						Role:    schema.Assistant,
-						Content: a.prompts.IntentFailedRecovery})
+			} else {
+				var intent Intention
+				if err := json.Unmarshal([]byte(msg.Content), &intent); err != nil {
+					logger.Error(
+						"failed to parse intent message",
+						"error", "failed to parse message", "content", msg.Content)
+				} else {
+					intentValue = normalizeIntent(intent.Intent)
 				}
-				state.History = msgs
-				output.Messages = state.History
-				return output, nil
-			},
-		),
+			}
+			var output []*schema.Message
+			compose.ProcessState[*HistoryMessage](
+				ctx, func(ctx context.Context, state *HistoryMessage) error {
+					state.ChatIntent = intentValue
+					msgs := cleanupOutputMessage(state.History)
+					if intentValue == IntentFailed {
+						// if parse failed, we also notify user that the parse failed, please contact bot service
+						msgs = append(msgs, &schema.Message{
+							Role:    schema.Assistant,
+							Content: a.prompts.IntentFailedRecovery})
+					}
+					state.History = msgs
+					output = msgs
+					return nil
+				})
+			return output, nil
+		}),
 	)
-}
-
-// this node goes after the intent classification branch; it removes the intent
-// but preserves (outputs) the []*schema.Message
-func (a *CinnaReactAgent) AddIntentCleanupLambdaNode() {
-
 }
 
 // ========== Cinna Chat Model ==========

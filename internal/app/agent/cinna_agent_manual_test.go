@@ -166,11 +166,17 @@ func (a *CinnaReactAgent) buildIntentLambdaOutputNode(
 	a.AddIntentClassificationNodes()
 	a.AddIntentOutputLambdaNode()
 	graph.AddLambdaNode("mock_final_output",
-		compose.InvokableLambda[*IntentLambdaOutput, *schema.Message](func(
-			ctx context.Context, input *IntentLambdaOutput) (*schema.Message, error) {
-			t.Log("Intent: ", input.Intent)
-			t.Log("Messages: ", input.Messages)
-			return input.Messages[len(input.Messages)-1], nil
+		compose.InvokableLambda[[]*schema.Message, *schema.Message](func(
+			ctx context.Context, input []*schema.Message) (*schema.Message, error) {
+			compose.ProcessState[*HistoryMessage](ctx, func(
+				ctx context.Context,
+				state *HistoryMessage,
+			) error {
+				t.Log("Intent: ", state.ChatIntent)
+				t.Log("Messages: ", state.History)
+				return nil
+			})
+			return input[len(input)-1], nil
 		}),
 	)
 	graph.AddEdge(compose.START, intentLLMNodeName)
