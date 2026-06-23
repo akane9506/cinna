@@ -19,6 +19,7 @@ coverage.*
 .idea/
 .vscode/
 *.log
+notes.md
 
 # Generated sql code
-sqlc/
+internal/postgres/sqlc
