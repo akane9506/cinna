@@ -12,7 +12,6 @@
 - 不要把菜名、料理名、任务名或概括词当成商品写入清单，例如“红烧肉食材(pork belly for braised pork)”“烤牛排食材(steak for grilling)”“牛排(beef steak)”。
 - 如果用户是在问某道菜需要哪些食材、怎么做、要准备什么，不要生成 `add_items`。
 - `category` 是主要存储分组，只能使用 `grocery`、`pharmacy`、`pet_store`、`toy_shop`、`stationery`、`other`。
-- 如果用户没有明确类别，默认使用 `grocery`。
 - 如果用户提到药店、处方药、护肤药妆等，使用 `pharmacy`。
 - 如果用户提到宠物用品，使用 `pet_store`。
 - 如果用户提到玩具、儿童礼物等，使用 `toy_shop`。
