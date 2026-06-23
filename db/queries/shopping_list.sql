@@ -27,7 +27,7 @@ ON CONFLICT (
     lower(btrim(name))
 )
 DO UPDATE SET
-    category = EXCLUDE.category,
+    category = EXCLUDED.category,
     updated_at = NOW()
 RETURNING *;
 

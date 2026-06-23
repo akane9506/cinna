@@ -13,14 +13,20 @@ CREATE TABLE IF NOT EXISTS allowed_users (
 );
 
 -- Table for the shopping list
-CREATE TYPE shopping_category AS ENUM (
-    'grocery',
-    'pharmacy',
-    'pet_store',
-    'toy_shop',
-    'stationery',
-    'other'
-);
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'shopping_category') THEN
+        CREATE TYPE shopping_category AS ENUM (
+            'grocery',
+            'pharmacy',
+            'pet_store',
+            'toy_shop',
+            'stationery',
+            'other'
+        );
+    END IF;
+END
+$$;
 
 CREATE TABLE IF NOT EXISTS shopping_list (
     id BIGSERIAL PRIMARY KEY,
