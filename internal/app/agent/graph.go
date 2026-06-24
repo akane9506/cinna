@@ -9,12 +9,14 @@ import (
 
 // ========= Build Graph ==========
 func (a *CinnaReactAgent) BuildGraph(
-	ctx context.Context) (compose.Runnable[[]*schema.Message, *schema.Message], error) {
+	ctx context.Context) (compose.Runnable[*TaskInput, *schema.Message], error) {
 	graph := a.graph
+	a.AddProcessInputLambdaNode()
 	a.AddIntentClassificationNodes()
 	a.AddIntentOutputLambdaNode()
 	a.AddCinnaResponseNode()
-	graph.AddEdge(compose.START, intentLLMNodeName)
+	graph.AddEdge(compose.START, processInputLambdaNodeName)
+	graph.AddEdge(processInputLambdaNodeName, intentLLMNodeName)
 	graph.AddEdge(intentLLMNodeName, intentLambdaNodeName)
 	a.AddIntentBranch()
 	graph.AddEdge(cinnaChatNodeName, compose.END)

@@ -8,6 +8,7 @@ import (
 	"github.com/akane9506/cinna/internal/app"
 	"github.com/akane9506/cinna/internal/app/agent/memory"
 	"github.com/akane9506/cinna/internal/app/agent/prompt"
+	"github.com/akane9506/cinna/internal/app/ports"
 	"github.com/cloudwego/eino-ext/components/model/deepseek"
 	"github.com/cloudwego/eino/compose"
 	"github.com/cloudwego/eino/schema"
@@ -16,10 +17,11 @@ import (
 type CinnaReactAgent struct {
 	chatModel *deepseek.ChatModel
 	jsonModel *deepseek.ChatModel
-	graph     *compose.Graph[[]*schema.Message, *schema.Message]
+	graph     *compose.Graph[*TaskInput, *schema.Message]
 	prompts   *prompt.Prompts
-	runner    compose.Runnable[[]*schema.Message, *schema.Message]
+	runner    compose.Runnable[*TaskInput, *schema.Message]
 	store     *memory.InMemoryStore
+	repos     *ports.Repositories
 	logger    *slog.Logger
 }
 
@@ -27,8 +29,10 @@ type CinnaReactAgent struct {
 func NewCinnaReactAgent(
 	ctx context.Context,
 	config *app.Config,
+	repos *ports.Repositories,
 	logger *slog.Logger) (*CinnaReactAgent, error) {
 	agent, err := initializeBaseAgent(ctx, config, logger)
+	agent.repos = repos
 	if err != nil {
 		return nil, err
 	}
@@ -65,9 +69,9 @@ func initializeBaseAgent(
 	// initialize in-memory store (state)
 	store := memory.NewImMemoryStore()
 	// initialize graph with local chat history state
-	graph := compose.NewGraph[[]*schema.Message, *schema.Message](
-		compose.WithGenLocalState(func(ctx context.Context) (state *HistoryMessage) {
-			return &HistoryMessage{
+	graph := compose.NewGraph[*TaskInput, *schema.Message](
+		compose.WithGenLocalState(func(ctx context.Context) (state *CinnaAgentState) {
+			return &CinnaAgentState{
 				History: make([]*schema.Message, 0, 4),
 			}
 		}),
