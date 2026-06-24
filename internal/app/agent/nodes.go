@@ -6,15 +6,18 @@ import (
 	"fmt"
 	"strings"
 
+	db "github.com/akane9506/cinna/internal/postgres"
+	"github.com/akane9506/cinna/internal/postgres/sqlc"
 	"github.com/cloudwego/eino/compose"
 	"github.com/cloudwego/eino/schema"
 )
 
 const (
-	processInputLambdaNodeName = "process_input"
-	intentLLMNodeName          = "intent_classification"
-	intentLambdaNodeName       = "intent_validation"
-	cinnaChatNodeName          = "cinna_response"
+	processInputLambdaNodeName      = "process_input"
+	intentLLMNodeName               = "intent_classification"
+	intentLambdaNodeName            = "intent_validation"
+	listShoppingItemsLambdaNodeName = "list_shopping_items"
+	cinnaChatNodeName               = "cinna_response"
 )
 
 type Intention struct {
@@ -150,8 +153,67 @@ func (a *CinnaReactAgent) intentBranch(ctx context.Context, out []*schema.Messag
 }
 
 // ========== List Shopping Items Lambda ==========
+// List shopping list items, separate into expired and unexpired group, and format into *schema.Message
+// in: *[]schema.Message | out: []*schema.Message
+func (a *CinnaReactAgent) AddListShoppingItemsLambda() {
+	a.graph.AddLambdaNode(
+		listShoppingItemsLambdaNodeName,
+		compose.InvokableLambda[[]*schema.Message, []*schema.Message](a.processShoppingListItems),
+	)
+}
 
-func (a *CinnaReactAgent) listShoppingItems(ctx context.Context) {}
+func (a *CinnaReactAgent) processShoppingListItems(
+	ctx context.Context, msgs []*schema.Message) ([]*schema.Message, error) {
+	compose.ProcessState[*CinnaAgentState](
+		ctx,
+		func(ctx context.Context, state *CinnaAgentState) error {
+			finalListMessage := a.listShoppingListItems(ctx, state)
+			msgs = append(msgs, finalListMessage)
+			state.History = append(state.History, finalListMessage)
+			return nil
+		},
+	)
+	return msgs, nil
+}
+
+// query the database and get the shopping list items, separate them into
+// expired and unexpired parts
+func (a *CinnaReactAgent) listShoppingListItems(
+	ctx context.Context,
+	state *CinnaAgentState) *schema.Message {
+	logger := a.logger.With("Node", listShoppingItemsLambdaNodeName)
+	telegramUserID := state.TelegramUserID
+	// query database
+	shoppingListItems, err := a.repos.ShoppingList.ListShoppingListItems(ctx, telegramUserID)
+	if err != nil {
+		logger.Error("failed to get shopping list items", "error", err)
+		return &schema.Message{
+			Role:    schema.Assistant,
+			Content: "failed to get current list from database",
+		}
+	}
+	var activeItems, expiredItems []string
+	// group items into expired and unexpired
+	for _, item := range shoppingListItems {
+		itemName := formatItemName(item)
+		if db.IsExpired(&item) {
+			expiredItems = append(expiredItems, itemName)
+		} else {
+			activeItems = append(activeItems, itemName)
+		}
+	}
+	// format message
+	finalList := fmt.Sprintf(
+		"items in the current database: {activeItems: [%s], expiredItems: [%s]}",
+		strings.Join(activeItems, ", "),
+		strings.Join(expiredItems, ", "),
+	)
+	finalListMessage := &schema.Message{
+		Role:    schema.Assistant,
+		Content: finalList,
+	}
+	return finalListMessage
+}
 
 // ========== Cinna Chat Model ==========
 //
@@ -230,4 +292,9 @@ func normalizeAction(raw string) string {
 	default:
 		return ActionNone
 	}
+}
+
+// formate shopping list item name
+func formatItemName(item sqlc.ShoppingList) string {
+	return fmt.Sprintf("{category: %s, name: %s}", item.Category, item.Name)
 }
