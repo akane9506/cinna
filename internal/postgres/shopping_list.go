@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"time"
 
 	"github.com/akane9506/cinna/internal/app/ports"
 	"github.com/akane9506/cinna/internal/postgres/sqlc"
@@ -29,4 +30,13 @@ func (r *ShoppingListRepository) ListShoppingListItems(
 	ctx context.Context,
 	telegramUserID int64) ([]sqlc.ShoppingList, error) {
 	return r.queries.ListShoppingListItems(ctx, telegramUserID)
+}
+
+func IsExpired(item *sqlc.ShoppingList) bool {
+	// the current cutoff is one month
+	cutoff := time.Now().AddDate(0, -1, 0)
+	if item.UpdatedAt.Time.Before(cutoff) {
+		return true
+	}
+	return false
 }
