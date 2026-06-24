@@ -42,6 +42,11 @@ func main() {
 		os.Exit(1)
 	}
 	defer pool.Close()
+	// check schemas and tables
+	if err := db.CheckSchema(ctx, pool); err != nil {
+		logger.Error("database schema check failed", "error", err)
+		os.Exit(1)
+	}
 
 	// setup repositories
 	queries := sqlc.New(pool)

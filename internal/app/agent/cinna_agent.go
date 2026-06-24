@@ -32,10 +32,10 @@ func NewCinnaReactAgent(
 	repos *ports.Repositories,
 	logger *slog.Logger) (*CinnaReactAgent, error) {
 	agent, err := initializeBaseAgent(ctx, config, logger)
-	agent.repos = repos
 	if err != nil {
 		return nil, err
 	}
+	agent.repos = repos
 	// compile graph and create a runner
 	runner, err := agent.BuildGraph(ctx)
 	if err != nil {
