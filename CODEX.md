@@ -7,20 +7,6 @@ Do not modify files, apply patches, run formatting, or execute any command that
 changes the workspace. The user will make all changes manually. Show code changes
 in code blocks rather than diffs.
 
-## Status
-
-Cinna is a greenfield rebuild. The previous TypeScript/Bun/Firestore application
-was deleted intentionally.
-
-Do not:
-
-- Restore or port the old implementation.
-- Add Firestore compatibility.
-- Build data migration scripts.
-- Treat previous schemas or tests as requirements.
-
-The preserved prompts are the only implementation assets carried forward.
-
 ## Stack
 
 - Go
@@ -28,7 +14,6 @@ The preserved prompts are the only implementation assets carried forward.
 - PostgreSQL
 - `pgx`
 - `sqlc`
-- `goose`
 - Telegram Bot API
 - Standard library HTTP server unless a concrete need for another framework appears
 
@@ -47,28 +32,8 @@ The preserved prompts are the only implementation assets carried forward.
 
 ## Required Shopping Flow
 
-```text
-Telegram update
-  -> normalize input
-  -> load relevant context
-  -> classify intent
-  -> run shopping planner
-  -> validate command
-  -> execute domain service in a transaction
-  -> generate reply from operation result
-  -> send Telegram response
-```
-
 The Eino layer may select and orchestrate operations. It must not contain SQL or
 own transaction rules.
-
-## Testing
-
-- Pure domain rules: table-driven unit tests.
-- Repository behavior: PostgreSQL integration tests.
-- Eino workflows: fake model and fake tool implementations.
-- Telegram adapter: update fixtures with mocked application service.
-- End-to-end tests: only for critical vertical slices.
 
 Before handing off code, run:
 
@@ -76,11 +41,3 @@ Before handing off code, run:
 go test ./...
 go vet ./...
 ```
-
-Run the configured linter when it is introduced in Phase 0.
-
-## Plans
-
-`CINNA_PLAN.md` is the source of truth for scope and sequencing. Each phase must
-end in a working vertical slice. Avoid building generalized agent infrastructure
-before the shopping use case requires it.

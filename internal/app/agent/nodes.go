@@ -11,9 +11,10 @@ import (
 )
 
 const (
-	intentLLMNodeName    = "intent_classification"
-	intentLambdaNodeName = "intent_validation"
-	cinnaChatNodeName    = "cinna_response"
+	processInputLambdaNodeName = "process_input"
+	intentLLMNodeName          = "intent_classification"
+	intentLambdaNodeName       = "intent_validation"
+	cinnaChatNodeName          = "cinna_response"
 )
 
 type Intention struct {
@@ -34,26 +35,28 @@ const (
 	ActionNone   string = "NONE"
 )
 
-// ========== Cinna Chat Model ==========
-//
-// The last llm node in the graph, generates user-facing response
-// in: []*schema.Message | out: *[]schema.Message
-func (a *CinnaReactAgent) AddCinnaResponseNode() {
-	a.graph.AddChatModelNode(cinnaChatNodeName, a.chatModel,
-		compose.WithStatePreHandler(a.prepareForCinnaChat))
+// ========== Task Input ==========
+// It passes input data, including user id, history messages, to the agent's state
+// in: *TaskInput | out: []*schema.Message
+func (a *CinnaReactAgent) AddProcessInputLambdaNode() {
+	a.graph.AddLambdaNode(
+		processInputLambdaNodeName,
+		compose.InvokableLambda[*TaskInput, []*schema.Message](a.processTaskInput),
+	)
 }
 
-func (a *CinnaReactAgent) prepareForCinnaChat(
-	ctx context.Context,
-	input []*schema.Message,
-	state *HistoryMessage) ([]*schema.Message, error) {
-	msgs := organizeInputMessage(input, a.prompts.CinnaPersona)
-	state.SystemMessage = a.prompts.CinnaPersona
-	state.History = msgs
-	return msgs, nil
+func (a *CinnaReactAgent) processTaskInput(
+	ctx context.Context, input *TaskInput) ([]*schema.Message, error) {
+	compose.ProcessState[*CinnaAgentState](
+		ctx, func(ctx context.Context, state *CinnaAgentState) error {
+			state.TelegramUserID = input.telegramUserID
+			return nil
+		},
+	)
+	return input.chatHistory, nil
 }
 
-//	========== Intent classifier ==========
+// ========== Intent classifier ==========
 //
 // The first node in the graph, classifies the user's intention to decide the next step
 // in: []*schema.Message | out: *schema.Message
@@ -66,7 +69,7 @@ func (a *CinnaReactAgent) AddIntentClassificationNodes() {
 func (a *CinnaReactAgent) prepareForIntentClassification(
 	ctx context.Context,
 	input []*schema.Message,
-	state *HistoryMessage) ([]*schema.Message, error) {
+	state *CinnaAgentState) ([]*schema.Message, error) {
 	msgs := organizeInputMessage(input, a.prompts.IntentClassification)
 	state.SystemMessage = a.prompts.IntentClassification
 	state.History = msgs
@@ -103,8 +106,8 @@ func (a *CinnaReactAgent) processIntentOutput(
 		}
 	}
 	var output []*schema.Message
-	compose.ProcessState[*HistoryMessage](
-		ctx, func(ctx context.Context, state *HistoryMessage) error {
+	compose.ProcessState[*CinnaAgentState](
+		ctx, func(ctx context.Context, state *CinnaAgentState) error {
 			state.ChatIntent = intentValue
 			state.ActionType = actionValue
 			msgs := cleanupOutputMessage(state.History)
@@ -131,8 +134,8 @@ func (a *CinnaReactAgent) AddIntentBranch() {
 
 func (a *CinnaReactAgent) intentBranch(ctx context.Context, out []*schema.Message) (string, error) {
 	var next string
-	compose.ProcessState[*HistoryMessage](
-		ctx, func(ctx context.Context, state *HistoryMessage) error {
+	compose.ProcessState[*CinnaAgentState](
+		ctx, func(ctx context.Context, state *CinnaAgentState) error {
 			switch state.ChatIntent {
 			case IntentShopping:
 				next = cinnaChatNodeName // we just put this as a place holder
@@ -144,6 +147,29 @@ func (a *CinnaReactAgent) intentBranch(ctx context.Context, out []*schema.Messag
 			return nil
 		})
 	return next, nil
+}
+
+// ========== List Shopping Items Lambda ==========
+
+func (a *CinnaReactAgent) listShoppingItems(ctx context.Context) {}
+
+// ========== Cinna Chat Model ==========
+//
+// The last llm node in the graph, generates user-facing response
+// in: []*schema.Message | out: *[]schema.Message
+func (a *CinnaReactAgent) AddCinnaResponseNode() {
+	a.graph.AddChatModelNode(cinnaChatNodeName, a.chatModel,
+		compose.WithStatePreHandler(a.prepareForCinnaChat))
+}
+
+func (a *CinnaReactAgent) prepareForCinnaChat(
+	ctx context.Context,
+	input []*schema.Message,
+	state *CinnaAgentState) ([]*schema.Message, error) {
+	msgs := organizeInputMessage(input, a.prompts.CinnaPersona)
+	state.SystemMessage = a.prompts.CinnaPersona
+	state.History = msgs
+	return msgs, nil
 }
 
 // ========== Helper functions ==========

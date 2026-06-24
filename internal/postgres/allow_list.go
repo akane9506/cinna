@@ -13,9 +13,9 @@ type AllowListRepository struct {
 
 var _ ports.AllowListRepository = (*AllowListRepository)(nil)
 
-func NewAllowListRepository(db sqlc.DBTX) *AllowListRepository {
+func NewAllowListRepository(queries *sqlc.Queries) *AllowListRepository {
 	return &AllowListRepository{
-		queries: sqlc.New(db),
+		queries: queries,
 	}
 }
 

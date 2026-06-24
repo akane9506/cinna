@@ -6,6 +6,11 @@ import (
 	"github.com/cloudwego/eino/schema"
 )
 
+type TaskInput struct {
+	telegramUserID int64
+	chatHistory    []*schema.Message
+}
+
 func (a *CinnaReactAgent) HandleText(
 	ctx context.Context,
 	userID int64,
@@ -20,7 +25,12 @@ func (a *CinnaReactAgent) HandleText(
 	messages := a.store.Get(userID)
 	messages = append(messages, userMessage)
 
-	result, err := a.runner.Invoke(ctx, messages)
+	input := &TaskInput{
+		telegramUserID: userID,
+		chatHistory:    messages,
+	}
+
+	result, err := a.runner.Invoke(ctx, input)
 	if err != nil {
 		logger.Error("failed to get cinna response", "user_id", userID, "error", err)
 		return "", err

@@ -15,6 +15,7 @@ import (
 	"github.com/akane9506/cinna/internal/app/ports"
 	"github.com/akane9506/cinna/internal/app/telegram"
 	db "github.com/akane9506/cinna/internal/postgres"
+	"github.com/akane9506/cinna/internal/postgres/sqlc"
 )
 
 func main() {
@@ -41,15 +42,23 @@ func main() {
 		os.Exit(1)
 	}
 	defer pool.Close()
+	// check schemas and tables
+	if err := db.CheckSchema(ctx, pool); err != nil {
+		logger.Error("database schema check failed", "error", err)
+		os.Exit(1)
+	}
 
 	// setup repositories
-	allowlistRepo := db.NewAllowListRepository(pool)
+	queries := sqlc.New(pool)
+	allowlistRepo := db.NewAllowListRepository(queries)
+	shoppingListRepo := db.NewShoppingListRepository(queries)
 	repos := &ports.Repositories{
-		AllowList: allowlistRepo,
+		AllowList:    allowlistRepo,
+		ShoppingList: shoppingListRepo,
 	}
 
 	// create an agent
-	agent, err := agent.NewCinnaReactAgent(ctx, config, logger)
+	agent, err := agent.NewCinnaReactAgent(ctx, config, repos, logger)
 	if err != nil {
 		logger.Error("failed to create cinna agent", "error", err)
 		os.Exit(1)

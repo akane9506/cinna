@@ -14,6 +14,8 @@ import (
 	"github.com/cloudwego/eino/schema"
 )
 
+const mockTelegramUserID = 181496207
+
 func TestDeepseekFlashModelManual(t *testing.T) {
 	models, ctx := setupDeepseekModelTesting(t)
 	chatModel, err := models.CreateDeepseekFlashModel(ctx)
@@ -75,10 +77,13 @@ func TestCinnaChat(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	input := []*schema.Message{
+	msgs := []*schema.Message{
 		&schema.Message{Role: schema.User, Content: "你好呀Cinna"},
 	}
-	result, err := runnable.Invoke(ctx, input)
+	result, err := runnable.Invoke(ctx, &TaskInput{
+		telegramUserID: mockTelegramUserID,
+		chatHistory:    msgs,
+	})
 	t.Log(result.Content)
 	t.Log("completion tokens: ",
 		result.ResponseMeta.Usage.CompletionTokens,
@@ -101,29 +106,32 @@ func TestIntentLambda(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	input := &TaskInput{
+		telegramUserID: mockTelegramUserID,
+	}
 	t.Log("======== Shopping intention lambda testing 1 ========")
-	input := []*schema.Message{
+	input.chatHistory = []*schema.Message{
 		&schema.Message{Role: schema.Assistant, Content: "做蛋糕需要用到面粉和糖"},
 		&schema.Message{Role: schema.User, Content: "可以帮我把这些记下吗？"},
 	}
 	_, err = runnable.Invoke(ctx, input)
 	t.Log("======== Shopping intention lambda testing 2 ========")
-	input = []*schema.Message{
+	input.chatHistory = []*schema.Message{
 		&schema.Message{Role: schema.User, Content: "可以看一下我都要买什么吗？"},
 	}
 	_, err = runnable.Invoke(ctx, input)
 	t.Log("======== Other intention lambda testing ========")
-	input = []*schema.Message{
+	input.chatHistory = []*schema.Message{
 		&schema.Message{Role: schema.User, Content: ""},
 	}
 	_, err = runnable.Invoke(ctx, input)
 	t.Log("======== Other intention lambda testing ========")
-	input = []*schema.Message{
+	input.chatHistory = []*schema.Message{
 		&schema.Message{Role: schema.User, Content: "拍摄模型车需要用到什么设备呀？"},
 	}
 	_, err = runnable.Invoke(ctx, input)
 	t.Log("======== Feedback intention lambda testing ========")
-	input = []*schema.Message{
+	input.chatHistory = []*schema.Message{
 		&schema.Message{Role: schema.User, Content: "Cinna目前的回复速度好慢呀？"},
 	}
 	_, err = runnable.Invoke(ctx, input)
@@ -144,13 +152,15 @@ func setupDeepseekModelTesting(t *testing.T) (*Models, context.Context) {
 
 // ========== Graph-Building For Manual Tests [DO NOT USE IN PRODUCTION] ==========
 func (a *CinnaReactAgent) buildCinnaChatGraph(
-	ctx context.Context) (compose.Runnable[[]*schema.Message, *schema.Message], error) {
+	ctx context.Context) (compose.Runnable[*TaskInput, *schema.Message], error) {
 	if a.runner != nil {
 		return nil, fmt.Errorf("this is only for manual test, do not use it in production")
 	}
 	graph := a.graph
+	a.AddProcessInputLambdaNode()
 	a.AddCinnaResponseNode()
-	graph.AddEdge(compose.START, cinnaChatNodeName)
+	graph.AddEdge(compose.START, processInputLambdaNodeName)
+	graph.AddEdge(processInputLambdaNodeName, cinnaChatNodeName)
 	graph.AddEdge(cinnaChatNodeName, compose.END)
 	runnable, err := graph.Compile(ctx)
 	if err != nil {
@@ -161,21 +171,22 @@ func (a *CinnaReactAgent) buildCinnaChatGraph(
 }
 
 func (a *CinnaReactAgent) buildIntentLambdaOutputNode(
-	ctx context.Context, t *testing.T) (compose.Runnable[[]*schema.Message, *schema.Message], error) {
+	ctx context.Context, t *testing.T) (compose.Runnable[*TaskInput, *schema.Message], error) {
 	if a.runner != nil {
 		return nil, fmt.Errorf("this is only for manual test, do not use it in production")
 	}
 	// add a test-purposed node to make the test graph type compatible with the
 	// agent's I/O type
 	graph := a.graph
+	a.AddProcessInputLambdaNode()
 	a.AddIntentClassificationNodes()
 	a.AddIntentOutputLambdaNode()
 	graph.AddLambdaNode("mock_final_output",
 		compose.InvokableLambda[[]*schema.Message, *schema.Message](func(
 			ctx context.Context, input []*schema.Message) (*schema.Message, error) {
-			compose.ProcessState[*HistoryMessage](ctx, func(
+			compose.ProcessState[*CinnaAgentState](ctx, func(
 				ctx context.Context,
-				state *HistoryMessage,
+				state *CinnaAgentState,
 			) error {
 				t.Log("Intent: ", state.ChatIntent)
 				t.Log("Action: ", state.ActionType)
@@ -185,7 +196,8 @@ func (a *CinnaReactAgent) buildIntentLambdaOutputNode(
 			return input[len(input)-1], nil
 		}),
 	)
-	graph.AddEdge(compose.START, intentLLMNodeName)
+	graph.AddEdge(compose.START, processInputLambdaNodeName)
+	graph.AddEdge(processInputLambdaNodeName, intentLLMNodeName)
 	graph.AddEdge(intentLLMNodeName, intentLambdaNodeName)
 	graph.AddEdge(intentLambdaNodeName, "mock_final_output")
 	graph.AddEdge("mock_final_output", compose.END)
