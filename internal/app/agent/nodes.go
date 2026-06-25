@@ -148,6 +148,7 @@ func (a *CinnaReactAgent) processIntentOutput(
 // route the task to different branch based on the classified intent
 func (a *CinnaReactAgent) AddIntentBranch() {
 	endNodes := map[string]bool{}
+	endNodes[listShoppingItemsLambdaNodeName] = true
 	endNodes[cinnaChatNodeName] = true
 	a.graph.AddBranch(intentLambdaNodeName, compose.NewGraphBranch(a.intentBranch, endNodes))
 }
