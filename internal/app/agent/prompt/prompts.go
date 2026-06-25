@@ -10,6 +10,7 @@ const (
 	cinnaPersonaPath         = "cinna_persona.md"
 	intentClassificationPath = "intent_classification.md"
 	intentFailedRecoveryPath = "intent_failed_recovery.md"
+	shoppingTaskPlannerPath  = "shopping_task_planner.md"
 )
 
 //go:embed cinna_persona.md
@@ -21,10 +22,14 @@ var intentClassificationPrompt string
 //go:embed intent_failed_recovery.md
 var intentFailedRecoveryPrompt string
 
+//go:embed shopping_task_planner.md
+var shoppingTaskPlannerPrompt string
+
 type Prompts struct {
 	CinnaPersona         string
 	IntentClassification string
 	IntentFailedRecovery string
+	ShoppingListPlanner  string
 	logger               *slog.Logger
 }
 
@@ -33,6 +38,7 @@ func LoadPromptFiles(logger *slog.Logger) *Prompts {
 	prompts.CinnaPersona = prompts.loadEmbeddedPrompt(cinnaPersonaPath, cinnaPersonaPrompt)
 	prompts.IntentClassification = prompts.loadEmbeddedPrompt(intentClassificationPath, intentClassificationPrompt)
 	prompts.IntentFailedRecovery = prompts.loadEmbeddedPrompt(intentFailedRecoveryPath, intentFailedRecoveryPrompt)
+	prompts.ShoppingListPlanner = prompts.loadEmbeddedPrompt(shoppingTaskPlannerPath, shoppingTaskPlannerPrompt)
 
 	return prompts
 }

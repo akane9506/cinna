@@ -158,6 +158,7 @@ func TestListShoppingListItems(t *testing.T) {
 				mock.Anything,
 			).Return(tt.mockDBOutput, tt.error).Once()
 			msg := testAgent.listShoppingListItems(ctx, mockState)
+			t.Log(msg)
 			assert.NotNil(t, msg)
 			assert.Equal(t, msg.Role, schema.Assistant)
 			if tt.error != nil {
