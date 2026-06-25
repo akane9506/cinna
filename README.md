@@ -8,7 +8,9 @@ short-term in-memory chat history per Telegram user.
 
 ```mermaid
 flowchart LR
-    Start([START]) --> IntentClassifier["Intent Classification<br/><br/>Classifies user intention and possible action<br/><br/>In: schema.Message[]<br/>Out: schema.Message"]
+    Start([START]) --> InputProcessLambda["Input Process Lambda<br/><br/>Processes input and stores necessary info in the state<br/><br/>In: TaskInput<br/>Out: schema.Message[]"]
+
+    InputProcessLambda --> IntentClassifier["Intent Classification<br/><br/>Classifies user intention and possible action<br/><br/>In: schema.Message[]<br/>Out: schema.Message"]
 
     IntentClassifier --> IntentLambda["Intent Validation Lambda<br/><br/>Validates intent classification node output<br/>and feeds intention to output branching<br/><br/>In: schema.Message<br/>Out: schema.Message[]"]
 
@@ -20,9 +22,7 @@ flowchart LR
 
     ActionRouter -- UPDATE --> ShoppingPlanner["ShoppingPlanner<br/><br/>Reads user-Cinna chat history<br/>and decides the Shopping DB operation<br/><br/>In: schema.Message[]<br/>Out: schema.Message"]
 
-    ActionRouter -- LIST --> ListMessageLambda["List Message Lambda<br/><br/>Injects prompt to tell Cinna to only include the content the user needs<br/>and notify the user that some items are expired"]
-
-    ListMessageLambda --> CinnaReply["CinnaReply"]
+    ActionRouter -- LIST --> CinnaReply["CinnaReply"]
 
     ShoppingPlanner --> ShoppingOutput["Shopping JSON<br/><br/>{<br/>category: string<br/>action: string<br/>item: string<br/>}"]
 

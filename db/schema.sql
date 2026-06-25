@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS allowed_users (
 );
 
 -- Table for the shopping list
+-- If you modify this part, also change internal/app/agent/prompt/shopping_task_planner.md
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'shopping_category') THEN

@@ -17,12 +17,24 @@ const (
 	intentLLMNodeName               = "intent_classification"
 	intentLambdaNodeName            = "intent_validation"
 	listShoppingItemsLambdaNodeName = "list_shopping_items"
+	shoppingTasksPlannerLLMNodeName = "plan_shopping_tasks"
 	cinnaChatNodeName               = "cinna_response"
 )
 
 type Intention struct {
 	Intent string `json:"intent"`
 	Action string `json:"action"`
+}
+
+type UpdateShoppingListCommands struct {
+	Commands []UpdateShoppingListCommand `json:"commands"`
+}
+
+type UpdateShoppingListCommand struct {
+	Method   string  `json:"method"`
+	ID       *string `json:"id"`
+	Category *string `json:"category"`
+	Name     *string `json:"name"`
 }
 
 const (
@@ -36,6 +48,11 @@ const (
 	ActionList   string = "LIST"
 	ActionUpdate string = "UPDATE"
 	ActionNone   string = "NONE"
+
+	// for db updates
+	MethodAdd    string = "ADD"
+	MethodRemove string = "REMOVE"
+	MethodModify string = "MODIFY"
 )
 
 // ========== Task Input ==========
@@ -63,7 +80,7 @@ func (a *CinnaReactAgent) processTaskInput(
 //
 // The first node in the graph, classifies the user's intention to decide the next step
 // in: []*schema.Message | out: *schema.Message
-func (a *CinnaReactAgent) AddIntentClassificationNodes() {
+func (a *CinnaReactAgent) AddIntentClassificationNode() {
 	a.graph.AddChatModelNode(intentLLMNodeName, a.jsonModel,
 		compose.WithStatePreHandler(a.prepareForIntentClassification),
 	)
@@ -131,6 +148,7 @@ func (a *CinnaReactAgent) processIntentOutput(
 // route the task to different branch based on the classified intent
 func (a *CinnaReactAgent) AddIntentBranch() {
 	endNodes := map[string]bool{}
+	endNodes[listShoppingItemsLambdaNodeName] = true
 	endNodes[cinnaChatNodeName] = true
 	a.graph.AddBranch(intentLambdaNodeName, compose.NewGraphBranch(a.intentBranch, endNodes))
 }
@@ -141,7 +159,7 @@ func (a *CinnaReactAgent) intentBranch(ctx context.Context, out []*schema.Messag
 		ctx, func(ctx context.Context, state *CinnaAgentState) error {
 			switch state.ChatIntent {
 			case IntentShopping:
-				next = cinnaChatNodeName // we just put this as a place holder
+				next = listShoppingItemsLambdaNodeName // we just put this as a place holder
 			case IntentOther:
 				next = cinnaChatNodeName
 			default:
@@ -213,6 +231,25 @@ func (a *CinnaReactAgent) listShoppingListItems(
 		Content: finalList,
 	}
 	return finalListMessage
+}
+
+// ========== ShoppingListUpdatePlanner ==========
+// Plans the task based on the database and user's description
+// in: []*schema.Message | out: *schema.Message
+func (a *CinnaReactAgent) AddShoppingTaskPlanningNode() {
+	a.graph.AddChatModelNode(shoppingTasksPlannerLLMNodeName, a.jsonModel,
+		compose.WithStatePreHandler(a.prepareForShoppingTaskPlanning),
+	)
+}
+
+func (a *CinnaReactAgent) prepareForShoppingTaskPlanning(
+	ctx context.Context,
+	input []*schema.Message,
+	state *CinnaAgentState) ([]*schema.Message, error) {
+	state.SystemMessage = a.prompts.ShoppingListPlanner
+	msgs := organizeInputMessage(input, state.SystemMessage)
+	state.History = msgs
+	return msgs, nil
 }
 
 // ========== Cinna Chat Model ==========
@@ -296,5 +333,9 @@ func normalizeAction(raw string) string {
 
 // formate shopping list item name
 func formatItemName(item sqlc.ShoppingList) string {
-	return fmt.Sprintf("{category: %s, name: %s}", item.Category, item.Name)
+	return fmt.Sprintf(
+		"{id: %d, category: %s, name: %s}",
+		item.ID,
+		item.Category,
+		item.Name)
 }
