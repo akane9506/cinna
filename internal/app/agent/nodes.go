@@ -32,31 +32,11 @@ type UpdateShoppingListCommands struct {
 }
 
 type UpdateShoppingListCommand struct {
-	Method   string `json:"method"`
 	ID       string `json:"id"`
-	Category string `json:"category"`
 	Name     string `json:"name"`
+	Category string `json:"category"`
+	Method   string `json:"method"`
 }
-
-type DBMethod string
-
-const (
-	// For intent classification
-	IntentOther    string = "OTHER"
-	IntentShopping string = "SHOPPING"
-	IntentFeedback string = "FEEDBACK"
-	IntentFailed   string = "FAILED"
-
-	// for action classification
-	ActionList   string = "LIST"
-	ActionUpdate string = "UPDATE"
-	ActionNone   string = "NONE"
-
-	// for db updates
-	MethodAdd    DBMethod = "ADD"
-	MethodRemove DBMethod = "REMOVE"
-	MethodModify DBMethod = "MODIFY"
-)
 
 // ========== Task Input ==========
 // It passes input data, including user id, history messages, to the agent's state
@@ -280,6 +260,8 @@ func (a *CinnaReactAgent) parseShoppingListCommands(
 			continue
 		}
 		command.Method = string(method) // avoid case and white space problems
+		category := normalizeShoppingCategory(command.Category)
+		command.Category = string(category) // avoid incompatible category type
 		organizedCommands[method] =
 			append(organizedCommands[method], command)
 	}
@@ -341,38 +323,6 @@ func cleanupOutputMessage(output []*schema.Message) []*schema.Message {
 		msgs = append(msgs, msg)
 	}
 	return msgs
-}
-
-// normalize the parsed intent
-func normalizeIntent(raw string) string {
-	raw = strings.ToUpper(strings.TrimSpace(raw))
-	switch raw {
-	case IntentShopping, IntentFeedback, IntentOther:
-		return raw
-	default:
-		return IntentFailed
-	}
-}
-
-// normalize the parsed action type
-func normalizeAction(raw string) string {
-	raw = strings.ToUpper(strings.TrimSpace(raw))
-	switch raw {
-	case ActionList, ActionUpdate, ActionNone:
-		return raw
-	default:
-		return ActionNone
-	}
-}
-
-func normalizeMethod(raw string) (DBMethod, error) {
-	method := DBMethod(strings.ToUpper(strings.TrimSpace(raw)))
-	switch method {
-	case MethodAdd, MethodModify, MethodRemove:
-		return method, nil
-	default:
-		return "", fmt.Errorf("invalid method type: %s", method)
-	}
 }
 
 // formate shopping list item name

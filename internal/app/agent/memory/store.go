@@ -6,7 +6,7 @@ import (
 	"github.com/cloudwego/eino/schema"
 )
 
-const defaultMaxLength = 50
+const defaultMaxLength = 30 // 30 histories,  including assistant and user msg, should be enough
 
 type InMemoryStore struct {
 	mu        sync.RWMutex

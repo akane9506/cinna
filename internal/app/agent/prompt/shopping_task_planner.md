@@ -8,8 +8,8 @@
 category 只能是：
 - grocery
 - pharmacy
-- pet_store
-- toy_shop
+- pet
+- toy
 - stationery
 - other
 
@@ -93,7 +93,7 @@ JSON 格式：
     {
       "id": "",
       "method": "ADD",
-      "category": "pet_store",
+      "category": "pet",
       "name": "猫砂(cat litter)"
     }
   ]
@@ -147,7 +147,7 @@ JSON 格式：
 
 用户：“不要猫砂了”
 当前数据库：[
-  {"id": "8", "category": "pet_store", "name": "猫砂(cat litter)"}
+  {"id": "8", "category": "pet", "name": "猫砂(cat litter)"}
 ]
 输出：
 {
