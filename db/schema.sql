@@ -20,8 +20,8 @@ BEGIN
         CREATE TYPE shopping_category AS ENUM (
             'grocery',
             'pharmacy',
-            'pet_store',
-            'toy_shop',
+            'pet',
+            'toy',
             'stationery',
             'other'
         );

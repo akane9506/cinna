@@ -18,6 +18,7 @@ const (
 	intentLambdaNodeName            = "intent_validation"
 	listShoppingItemsLambdaNodeName = "list_shopping_items"
 	shoppingTasksPlannerLLMNodeName = "plan_shopping_tasks"
+	shoppingTaskRunLambdaNodeName   = "execute_shopping_command"
 	cinnaChatNodeName               = "cinna_response"
 )
 
@@ -31,29 +32,11 @@ type UpdateShoppingListCommands struct {
 }
 
 type UpdateShoppingListCommand struct {
-	Method   string  `json:"method"`
-	ID       *string `json:"id"`
-	Category *string `json:"category"`
-	Name     *string `json:"name"`
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Category string `json:"category"`
+	Method   string `json:"method"`
 }
-
-const (
-	// For intent classification
-	IntentOther    string = "OTHER"
-	IntentShopping string = "SHOPPING"
-	IntentFeedback string = "FEEDBACK"
-	IntentFailed   string = "FAILED"
-
-	// for action classification
-	ActionList   string = "LIST"
-	ActionUpdate string = "UPDATE"
-	ActionNone   string = "NONE"
-
-	// for db updates
-	MethodAdd    string = "ADD"
-	MethodRemove string = "REMOVE"
-	MethodModify string = "MODIFY"
-)
 
 // ========== Task Input ==========
 // It passes input data, including user id, history messages, to the agent's state
@@ -77,6 +60,7 @@ func (a *CinnaReactAgent) processTaskInput(
 }
 
 // ========== Intent classifier ==========
+// * Don't save the classification output in the state
 //
 // The first node in the graph, classifies the user's intention to decide the next step
 // in: []*schema.Message | out: *schema.Message
@@ -233,7 +217,7 @@ func (a *CinnaReactAgent) listShoppingListItems(
 	return finalListMessage
 }
 
-// ========== ShoppingListUpdatePlanner ==========
+// ========== Shopping List Update Planner ==========
 // Plans the task based on the database and user's description
 // in: []*schema.Message | out: *schema.Message
 func (a *CinnaReactAgent) AddShoppingTaskPlanningNode() {
@@ -250,6 +234,38 @@ func (a *CinnaReactAgent) prepareForShoppingTaskPlanning(
 	msgs := organizeInputMessage(input, state.SystemMessage)
 	state.History = msgs
 	return msgs, nil
+}
+
+// ========== Shopping List Command Update Lambda ==========
+// parse the output from the planner, and execute commands
+// in: *schema.Message | out: []*schema.Message
+type ShoppingListCommands map[DBMethod][]UpdateShoppingListCommand
+
+func (a *CinnaReactAgent) parseShoppingListCommands(
+	rawMessage string) ShoppingListCommands {
+	logger := a.logger.With("Node", shoppingTaskRunLambdaNodeName)
+	organizedCommands := ShoppingListCommands{}
+	var rawCommands UpdateShoppingListCommands
+	if err := json.Unmarshal([]byte(rawMessage), &rawCommands); err != nil {
+		logger.Error("Invalid json", "error", err)
+		return organizedCommands
+	}
+	for _, command := range rawCommands.Commands {
+		method, err := normalizeMethod(command.Method)
+		if err != nil {
+			logger.Error("Invalid method", "error", err)
+			continue
+		}
+		if strings.TrimSpace(command.Name) == "" {
+			continue
+		}
+		command.Method = string(method) // avoid case and white space problems
+		category := normalizeShoppingCategory(command.Category)
+		command.Category = string(category) // avoid incompatible category type
+		organizedCommands[method] =
+			append(organizedCommands[method], command)
+	}
+	return organizedCommands
 }
 
 // ========== Cinna Chat Model ==========
@@ -307,28 +323,6 @@ func cleanupOutputMessage(output []*schema.Message) []*schema.Message {
 		msgs = append(msgs, msg)
 	}
 	return msgs
-}
-
-// normalize the parsed intent
-func normalizeIntent(raw string) string {
-	raw = strings.ToUpper(raw)
-	switch raw {
-	case IntentShopping, IntentFeedback, IntentOther:
-		return raw
-	default:
-		return IntentFailed
-	}
-}
-
-// normalize the parsed action type
-func normalizeAction(raw string) string {
-	raw = strings.ToUpper(raw)
-	switch raw {
-	case ActionList, ActionUpdate, ActionNone:
-		return raw
-	default:
-		return ActionNone
-	}
 }
 
 // formate shopping list item name

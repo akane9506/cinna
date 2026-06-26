@@ -6,8 +6,8 @@ import "github.com/cloudwego/eino/schema"
 type CinnaAgentState struct {
 	TelegramUserID int64
 	SystemMessage  string // mainly for debugging purpose
-	ChatIntent     string // for the general chat intention
-	ActionType     string // whether list the db items for update db
+	ChatIntent     Intent // for the general chat intention
+	ActionType     Action // whether list the db items for update db
 	History        []*schema.Message
 	// maybe add token usage-related fields here
 }

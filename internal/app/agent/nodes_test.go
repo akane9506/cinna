@@ -175,3 +175,103 @@ func TestListShoppingListItems(t *testing.T) {
 		})
 	}
 }
+
+func TestParseShoppingListCommands(t *testing.T) {
+	t.Parallel()
+	mockLogger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	testAgent := &CinnaReactAgent{
+		logger: mockLogger,
+	}
+	tests := []struct {
+		name     string
+		raw      string
+		expected ShoppingListCommands
+	}{
+		{
+			name: "success",
+			raw: `{"commands": [{"id": "1","method": "REMOVE","category": "grocery","name": "milk"},
+			{"id": "2","method": "REMOVE","category": "grocery","name": "banana"},
+    {"id": "","method": "ADD","category": "stationery","name": "一盒彩色马克笔(marker)"},
+    {"id": "5","method": "MODIFY","category": "stationery","name": "A4 notebook"}
+  ]}`,
+			expected: ShoppingListCommands{
+				MethodRemove: {
+					{
+						ID:       "1",
+						Method:   "REMOVE",
+						Category: "grocery",
+						Name:     "milk",
+					},
+					{
+						ID:       "2",
+						Method:   "REMOVE",
+						Category: "grocery",
+						Name:     "banana",
+					},
+				},
+				MethodAdd: {
+					{
+						ID:       "",
+						Method:   "ADD",
+						Category: "stationery",
+						Name:     "一盒彩色马克笔(marker)",
+					},
+				},
+				MethodModify: {
+					{
+						ID:       "5",
+						Method:   "MODIFY",
+						Category: "stationery",
+						Name:     "A4 notebook",
+					},
+				},
+			},
+		},
+		{
+			name: "with invalid method",
+			raw: `{"commands": [{"id": "1","method": " REMOVE ","category": "grocery","name": "milk"},
+			{"id": "2","method": "REMOVAL","category": "grocery","name": "banana"},
+    {"id": "","method": "ADD","category": "stationery","name": "一盒彩色马克笔(marker)"},
+    {"id": "5","method": "MODIFY","category": "stationery","name": "A4 notebook"}
+  ]}`,
+			expected: ShoppingListCommands{
+				MethodRemove: {
+					{
+						ID:       "1",
+						Method:   "REMOVE",
+						Category: "grocery",
+						Name:     "milk",
+					},
+				},
+				MethodAdd: {
+					{
+						ID:       "",
+						Method:   "ADD",
+						Category: "stationery",
+						Name:     "一盒彩色马克笔(marker)",
+					},
+				},
+				MethodModify: {
+					{
+						ID:       "5",
+						Method:   "MODIFY",
+						Category: "stationery",
+						Name:     "A4 notebook",
+					},
+				},
+			},
+		},
+		{
+			name:     "invalid json",
+			raw:      `some invalid string`,
+			expected: ShoppingListCommands{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := testAgent.parseShoppingListCommands(tt.raw)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
