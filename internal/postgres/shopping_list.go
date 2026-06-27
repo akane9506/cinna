@@ -26,6 +26,20 @@ func (r *ShoppingListRepository) CreateShoppingListItems(
 	return r.queries.CreateShoppingListItems(ctx, arg)
 }
 
+func (r *ShoppingListRepository) UpdateShoppingListItems(
+	ctx context.Context,
+	arg sqlc.UpdateShoppingListItemsParams,
+) ([]sqlc.ShoppingList, error) {
+	return r.queries.UpdateShoppingListItems(ctx, arg)
+}
+
+func (r *ShoppingListRepository) RemoveShoppingListItems(
+	ctx context.Context,
+	arg sqlc.RemoveShoppingListItemsParams,
+) ([]sqlc.ShoppingList, error) {
+	return r.queries.RemoveShoppingListItems(ctx, arg)
+}
+
 func (r *ShoppingListRepository) ListShoppingListItems(
 	ctx context.Context,
 	telegramUserID int64) ([]sqlc.ShoppingList, error) {

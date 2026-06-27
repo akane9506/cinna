@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"slices"
 	"testing"
 	"time"
 
@@ -26,9 +27,48 @@ func (m *mockShoppingListRepo) CreateShoppingListItems(
 	arg sqlc.CreateShoppingListItemsParams,
 ) ([]sqlc.ShoppingList, error) {
 	args := m.Called(ctx, arg)
+	var items []sqlc.ShoppingList
+	if fn, ok := args.Get(0).(func(context.Context, sqlc.CreateShoppingListItemsParams) []sqlc.ShoppingList); ok {
+		items = fn(ctx, arg)
+	} else if args.Get(0) != nil {
+		items = args.Get(0).([]sqlc.ShoppingList)
+	}
+	var err error
+	if fn, ok := args.Get(1).(func(context.Context, sqlc.CreateShoppingListItemsParams) error); ok {
+		err = fn(ctx, arg)
+	} else {
+		err = args.Error(1)
+	}
+	return items, err
+}
 
+func (m *mockShoppingListRepo) UpdateShoppingListItems(
+	ctx context.Context,
+	arg sqlc.UpdateShoppingListItemsParams,
+) ([]sqlc.ShoppingList, error) {
+	args := m.Called(ctx, arg)
 	items, _ := args.Get(0).([]sqlc.ShoppingList)
 	return items, args.Error(1)
+}
+
+func (m *mockShoppingListRepo) RemoveShoppingListItems(
+	ctx context.Context,
+	arg sqlc.RemoveShoppingListItemsParams,
+) ([]sqlc.ShoppingList, error) {
+	args := m.Called(ctx, arg)
+	var items []sqlc.ShoppingList
+	if fn, ok := args.Get(0).(func(context.Context, sqlc.RemoveShoppingListItemsParams) []sqlc.ShoppingList); ok {
+		items = fn(ctx, arg)
+	} else if args.Get(0) != nil {
+		items = args.Get(0).([]sqlc.ShoppingList)
+	}
+	var err error
+	if fn, ok := args.Get(1).(func(context.Context, sqlc.RemoveShoppingListItemsParams) error); ok {
+		err = fn(ctx, arg)
+	} else {
+		err = args.Error(1)
+	}
+	return items, err
 }
 
 func (m *mockShoppingListRepo) ListShoppingListItems(
@@ -238,6 +278,132 @@ func TestParseShoppingListCommands(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result := testAgent.parseShoppingListCommands(tt.raw)
 			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestExecuteShoppingListCommand(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	mockLogger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	shoppingListRepo := new(mockShoppingListRepo)
+	mockRepos := &ports.Repositories{
+		ShoppingList: shoppingListRepo,
+	}
+	var telegramUserID int64 = 123321
+	testAgent := &CinnaReactAgent{
+		repos:  mockRepos,
+		logger: mockLogger,
+	}
+	tests := []struct {
+		name               string
+		input              ShoppingListCommands
+		add                bool
+		remove             bool
+		expectedContain    []string
+		expectedNotContain []string
+		mockAddError       error
+	}{
+		{
+			name: "success-add",
+			input: ShoppingListCommands{
+				MethodAdd: {
+					ItemIds:    nil,
+					Categories: []string{"stationery", "stationery"},
+					ItemNames:  []string{"一盒彩色马克笔(marker)", "A4 notebook"},
+				},
+			},
+			add:             true,
+			expectedContain: []string{"一盒彩色马克笔(marker)", "A4 notebook"},
+		},
+		{
+			name: "failed-wrong length",
+			input: ShoppingListCommands{
+				MethodAdd: {
+					ItemIds:    nil,
+					Categories: []string{"stationery"},
+					ItemNames:  []string{"一盒彩色马克笔(marker)", "A4 notebook"},
+				},
+			},
+			add:                true,
+			expectedNotContain: []string{"一盒彩色马克笔(marker)", "A4 notebook"},
+		},
+		{
+			name: "success-remove",
+			input: ShoppingListCommands{
+				MethodRemove: {
+					ItemIds:    []int64{1, 2},
+					Categories: []string{"stationery", "stationery"},
+					ItemNames:  []string{"一盒彩色马克笔(marker)", "A4 notebook"},
+				},
+			},
+			remove:          true,
+			expectedContain: []string{"一盒彩色马克笔(marker)", "A4 notebook"},
+		},
+		{
+			name: "failed-remove-empty",
+			input: ShoppingListCommands{
+				MethodRemove: {
+					ItemIds:    []int64{1, 2},
+					Categories: []string{"stationery"},
+					ItemNames:  []string{"一盒彩色马克笔(marker)", "A4 notebook"},
+				},
+			},
+			remove:          true,
+			expectedContain: []string{"no updates"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(*testing.T) {
+			if tt.add {
+				shoppingListRepo.On("CreateShoppingListItems",
+					mock.Anything,
+					mock.Anything,
+				).Return(func(ctx context.Context, arg sqlc.CreateShoppingListItemsParams) []sqlc.ShoppingList {
+					items := make([]sqlc.ShoppingList, len(arg.ItemNames))
+					for i := range arg.ItemNames {
+						items[i] = sqlc.ShoppingList{
+							ID:             int64(i + 1),
+							TelegramUserID: arg.TelegramUserID,
+							Name:           arg.ItemNames[i],
+							Category:       arg.Categories[i],
+						}
+					}
+					return items
+				}, tt.mockAddError)
+			}
+			if tt.remove {
+				shoppingListRepo.On("RemoveShoppingListItems",
+					mock.Anything,
+					mock.Anything,
+				).Return(func(ctx context.Context, arg sqlc.RemoveShoppingListItemsParams) []sqlc.ShoppingList {
+					items := make([]sqlc.ShoppingList, len(arg.ItemIds))
+					for i, id := range tt.input[MethodRemove].ItemIds {
+						if slices.Contains(arg.ItemIds, id) {
+							items[i] = sqlc.ShoppingList{
+								ID:             int64(i + 1),
+								TelegramUserID: arg.TelegramUserID,
+								Name:           tt.input[MethodRemove].ItemNames[i],
+								Category:       tt.input[MethodRemove].Categories[i],
+							}
+						}
+					}
+					return items
+				}, tt.mockAddError)
+			}
+			result := testAgent.executeShoppingListCommands(ctx, telegramUserID, tt.input)
+			resultContent := result.Content
+			if len(tt.expectedContain) > 0 {
+				for _, name := range tt.expectedContain {
+					assert.Contains(t, resultContent, name)
+				}
+			}
+			if len(tt.expectedNotContain) > 0 {
+				for _, name := range tt.expectedNotContain {
+					assert.NotContains(t, resultContent, name)
+				}
+			}
 		})
 	}
 }

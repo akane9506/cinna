@@ -237,7 +237,7 @@ func (a *CinnaReactAgent) prepareForShoppingTaskPlanning(
 	return msgs, nil
 }
 
-// ========== Shopping List Command Update Lambda ==========
+// ========== Update Shopping List Lambda ==========
 // parse the output from the planner, and execute commands
 // in: *schema.Message | out: []*schema.Message
 type ShoppingListCommandParams struct {
@@ -245,6 +245,7 @@ type ShoppingListCommandParams struct {
 	ItemNames  []string
 	Categories []string
 }
+
 type ShoppingListCommands map[DBMethod]*ShoppingListCommandParams
 
 func (a *CinnaReactAgent) parseShoppingListCommands(
@@ -293,6 +294,90 @@ func (a *CinnaReactAgent) parseShoppingListCommands(
 		organizedCommands[method] = params
 	}
 	return organizedCommands
+}
+
+func (a *CinnaReactAgent) executeShoppingListCommands(
+	ctx context.Context, telegramID int64, commands ShoppingListCommands) *schema.Message {
+	logger := a.logger.With("Node", shoppingTaskRunLambdaNodeName)
+	shoppingListRepo := a.repos.ShoppingList
+	var messageContents []string
+	// add items to shopping list
+	for method := range commands {
+		params, ok := commands[method]
+		if !ok {
+			continue
+		}
+		ids := params.ItemIds
+		itemName := params.ItemNames
+		categories := params.Categories
+		// validate input param sizes
+		if len(itemName) != len(categories) {
+			logger.Error("invalid params",
+				"method", method,
+				"item_name size", len(itemName),
+				"category size", len(categories),
+			)
+			continue
+		}
+		if method != MethodAdd && (len(ids) != len(itemName)) {
+			logger.Error("invalid params",
+				"method", method,
+				"ids size", len(ids),
+				"item_name size", len(itemName),
+			)
+			continue
+		}
+		var results []sqlc.ShoppingList
+		var err error
+		switch method {
+		case MethodAdd:
+			results, err = shoppingListRepo.CreateShoppingListItems(
+				ctx,
+				sqlc.CreateShoppingListItemsParams{
+					TelegramUserID: telegramID,
+					ItemNames:      params.ItemNames,
+					Categories:     params.Categories,
+				},
+			)
+		case MethodModify:
+			results, err = shoppingListRepo.UpdateShoppingListItems(
+				ctx,
+				sqlc.UpdateShoppingListItemsParams{
+					TelegramUserID: telegramID,
+					ItemIds:        params.ItemIds,
+					ItemNames:      params.ItemNames,
+					Categories:     params.Categories,
+				},
+			)
+		case MethodRemove:
+			results, err = shoppingListRepo.RemoveShoppingListItems(
+				ctx,
+				sqlc.RemoveShoppingListItemsParams{
+					TelegramUserID: telegramID,
+					ItemIds:        params.ItemIds,
+				},
+			)
+		}
+		if err != nil {
+			logger.Error("failed to update shopping list", "method", method, "error", err)
+			continue
+		}
+		// add formatted results to the response message
+		formattedResult := formatUpdateResult(method, results)
+		if formattedResult != "" {
+			messageContents = append(messageContents, formattedResult)
+		}
+	}
+	if len(messageContents) == 0 {
+		return &schema.Message{
+			Role:    schema.Assistant,
+			Content: "no updates, please let the user know", // should use a better version of content
+		}
+	}
+	return &schema.Message{
+		Role:    schema.Assistant,
+		Content: strings.Join(messageContents, ". "),
+	}
 }
 
 // ========== Cinna Chat Model ==========
@@ -359,4 +444,17 @@ func formatItemName(item sqlc.ShoppingList) string {
 		item.ID,
 		item.Category,
 		item.Name)
+}
+
+// format db update results into human/llm-friendly assistant messages
+func formatUpdateResult(method DBMethod, results []sqlc.ShoppingList) string {
+	if len(results) == 0 {
+		return ""
+	}
+	var items []string
+	for _, result := range results {
+		items = append(items, result.Name)
+	}
+	output := fmt.Sprintf("Successfully %s shopping list: %s", method, strings.Join(items, ", "))
+	return output
 }
