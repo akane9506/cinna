@@ -196,69 +196,35 @@ func TestParseShoppingListCommands(t *testing.T) {
   ]}`,
 			expected: ShoppingListCommands{
 				MethodRemove: {
-					{
-						ID:       "1",
-						Method:   "REMOVE",
-						Category: "grocery",
-						Name:     "milk",
-					},
-					{
-						ID:       "2",
-						Method:   "REMOVE",
-						Category: "grocery",
-						Name:     "banana",
-					},
-				},
+					ItemIds:    []int64{1, 2},
+					Categories: []string{"grocery", "grocery"},
+					ItemNames:  []string{"milk", "banana"}},
 				MethodAdd: {
-					{
-						ID:       "",
-						Method:   "ADD",
-						Category: "stationery",
-						Name:     "一盒彩色马克笔(marker)",
-					},
-				},
+					ItemIds:    nil,
+					Categories: []string{"stationery"},
+					ItemNames:  []string{"一盒彩色马克笔(marker)"}},
 				MethodModify: {
-					{
-						ID:       "5",
-						Method:   "MODIFY",
-						Category: "stationery",
-						Name:     "A4 notebook",
-					},
-				},
+					ItemIds:    []int64{5},
+					Categories: []string{"stationery"},
+					ItemNames:  []string{"A4 notebook"}},
 			},
 		},
 		{
 			name: "with invalid method",
-			raw: `{"commands": [{"id": "1","method": " REMOVE ","category": "grocery","name": "milk"},
+			raw: `{"commands": [{"id": "-1","method": " REMOVE ","category": "grocery","name": "milk"},
 			{"id": "2","method": "REMOVAL","category": "grocery","name": "banana"},
     {"id": "","method": "ADD","category": "stationery","name": "一盒彩色马克笔(marker)"},
     {"id": "5","method": "MODIFY","category": "stationery","name": "A4 notebook"}
   ]}`,
 			expected: ShoppingListCommands{
-				MethodRemove: {
-					{
-						ID:       "1",
-						Method:   "REMOVE",
-						Category: "grocery",
-						Name:     "milk",
-					},
-				},
 				MethodAdd: {
-					{
-						ID:       "",
-						Method:   "ADD",
-						Category: "stationery",
-						Name:     "一盒彩色马克笔(marker)",
-					},
-				},
+					ItemIds:    nil,
+					Categories: []string{"stationery"},
+					ItemNames:  []string{"一盒彩色马克笔(marker)"}},
 				MethodModify: {
-					{
-						ID:       "5",
-						Method:   "MODIFY",
-						Category: "stationery",
-						Name:     "A4 notebook",
-					},
-				},
+					ItemIds:    []int64{5},
+					Categories: []string{"stationery"},
+					ItemNames:  []string{"A4 notebook"}},
 			},
 		},
 		{

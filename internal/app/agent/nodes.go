@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 
 	db "github.com/akane9506/cinna/internal/postgres"
@@ -239,31 +240,57 @@ func (a *CinnaReactAgent) prepareForShoppingTaskPlanning(
 // ========== Shopping List Command Update Lambda ==========
 // parse the output from the planner, and execute commands
 // in: *schema.Message | out: []*schema.Message
-type ShoppingListCommands map[DBMethod][]UpdateShoppingListCommand
+type ShoppingListCommandParams struct {
+	ItemIds    []int64
+	ItemNames  []string
+	Categories []string
+}
+type ShoppingListCommands map[DBMethod]*ShoppingListCommandParams
 
 func (a *CinnaReactAgent) parseShoppingListCommands(
 	rawMessage string) ShoppingListCommands {
 	logger := a.logger.With("Node", shoppingTaskRunLambdaNodeName)
 	organizedCommands := ShoppingListCommands{}
+	// parse message into commands
 	var rawCommands UpdateShoppingListCommands
 	if err := json.Unmarshal([]byte(rawMessage), &rawCommands); err != nil {
 		logger.Error("Invalid json", "error", err)
 		return organizedCommands
 	}
+	// iterate over each command, and put valid ones into the command params
 	for _, command := range rawCommands.Commands {
+		// validate method
 		method, err := normalizeMethod(command.Method)
 		if err != nil {
 			logger.Error("Invalid method", "error", err)
 			continue
 		}
-		if strings.TrimSpace(command.Name) == "" {
+		command.Method = string(method) // avoid case and white space problems
+		// validate name
+		itemName := strings.TrimSpace(command.Name)
+		if itemName == "" {
 			continue
 		}
-		command.Method = string(method) // avoid case and white space problems
 		category := normalizeShoppingCategory(command.Category)
-		command.Category = string(category) // avoid incompatible category type
-		organizedCommands[method] =
-			append(organizedCommands[method], command)
+		// validate id (only when the method is not ADD)
+		var id int64
+		if method != MethodAdd {
+			id, err = strconv.ParseInt(command.ID, 10, 64)
+			if err != nil || id <= 0 {
+				logger.Error("Invalid id", "id", command.ID, "error", err)
+				continue
+			}
+		}
+		params, ok := organizedCommands[method]
+		if !ok {
+			params = &ShoppingListCommandParams{}
+		}
+		if method != MethodAdd {
+			params.ItemIds = append(params.ItemIds, id)
+		}
+		params.Categories = append(params.Categories, string(category))
+		params.ItemNames = append(params.ItemNames, itemName)
+		organizedCommands[method] = params
 	}
 	return organizedCommands
 }
