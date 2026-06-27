@@ -21,6 +21,16 @@ type ShoppingListRepository interface {
 		arg sqlc.CreateShoppingListItemsParams,
 	) ([]sqlc.ShoppingList, error)
 
+	RemoveShoppingListItems(
+		ctx context.Context,
+		arg sqlc.RemoveShoppingListItemsParams,
+	) ([]sqlc.ShoppingList, error)
+
+	UpdateShoppingListItems(
+		ctx context.Context,
+		arg sqlc.UpdateShoppingListItemsParams,
+	) ([]sqlc.ShoppingList, error)
+
 	ListShoppingListItems(
 		ctx context.Context,
 		telegramUserID int64,
