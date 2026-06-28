@@ -14,19 +14,10 @@ import (
 )
 
 const (
-	processInputLambdaNodeName      = "process_input"
-	intentLLMNodeName               = "intent_classification"
-	intentLambdaNodeName            = "intent_validation"
 	listShoppingItemsLambdaNodeName = "list_shopping_items"
 	shoppingTasksPlannerLLMNodeName = "plan_shopping_tasks"
 	shoppingTaskRunLambdaNodeName   = "execute_shopping_command"
-	cinnaChatNodeName               = "cinna_response"
 )
-
-type Intention struct {
-	Intent string `json:"intent"`
-	Action string `json:"action"`
-}
 
 type UpdateShoppingListCommands struct {
 	Commands []UpdateShoppingListCommand `json:"commands"`
@@ -37,122 +28,6 @@ type UpdateShoppingListCommand struct {
 	Name     string `json:"name"`
 	Category string `json:"category"`
 	Method   string `json:"method"`
-}
-
-// ========== Task Input ==========
-// It passes input data, including user id, history messages, to the agent's state
-// in: *TaskInput | out: []*schema.Message
-func (a *CinnaReactAgent) AddProcessInputLambdaNode() {
-	a.graph.AddLambdaNode(
-		processInputLambdaNodeName,
-		compose.InvokableLambda[*TaskInput, []*schema.Message](a.processTaskInput),
-	)
-}
-
-func (a *CinnaReactAgent) processTaskInput(
-	ctx context.Context, input *TaskInput) ([]*schema.Message, error) {
-	compose.ProcessState[*CinnaAgentState](
-		ctx, func(ctx context.Context, state *CinnaAgentState) error {
-			state.TelegramUserID = input.telegramUserID
-			return nil
-		},
-	)
-	return input.chatHistory, nil
-}
-
-// ========== Intent classifier ==========
-// * Don't save the classification output in the state
-//
-// The first node in the graph, classifies the user's intention to decide the next step
-// in: []*schema.Message | out: *schema.Message
-func (a *CinnaReactAgent) AddIntentClassificationNode() {
-	a.graph.AddChatModelNode(intentLLMNodeName, a.jsonModel,
-		compose.WithStatePreHandler(a.prepareForIntentClassification),
-	)
-}
-
-func (a *CinnaReactAgent) prepareForIntentClassification(
-	ctx context.Context,
-	input []*schema.Message,
-	state *CinnaAgentState) ([]*schema.Message, error) {
-	msgs := organizeInputMessage(input, a.prompts.IntentClassification)
-	state.SystemMessage = a.prompts.IntentClassification
-	state.History = msgs
-	return msgs, nil
-}
-
-// The lambda node helps parse the output from the intent classification, and cleans the history messages
-// IMPORTANT: we don't need to include the intention classification output in this lambda
-// in: *schema.Message | out: *IntentLambdaOutput
-func (a *CinnaReactAgent) AddIntentOutputLambdaNode() {
-	a.graph.AddLambdaNode(
-		intentLambdaNodeName,
-		compose.InvokableLambda[*schema.Message, []*schema.Message](a.processIntentOutput),
-	)
-}
-
-func (a *CinnaReactAgent) processIntentOutput(
-	ctx context.Context, msg *schema.Message) ([]*schema.Message, error) {
-	logger := a.logger.With("Node", intentLambdaNodeName)
-	intentValue := IntentFailed
-	actionValue := ActionNone
-	if msg == nil {
-		// we do not pause the agent flow even if there is an data-related error
-		logger.Error("failed to get message", "error", "nil input")
-	} else {
-		var intent Intention
-		if err := json.Unmarshal([]byte(msg.Content), &intent); err != nil {
-			logger.Error(
-				"failed to parse intent message",
-				"error", "failed to parse message", "content", msg.Content)
-		} else {
-			intentValue = normalizeIntent(intent.Intent)
-			actionValue = normalizeAction(intent.Action)
-		}
-	}
-	var output []*schema.Message
-	compose.ProcessState[*CinnaAgentState](
-		ctx, func(ctx context.Context, state *CinnaAgentState) error {
-			state.ChatIntent = intentValue
-			state.ActionType = actionValue
-			msgs := cleanupOutputMessage(state.History)
-			if intentValue == IntentFailed {
-				// if parse failed, we also notify user that the parse failed, please contact bot service
-				msgs = append(msgs, &schema.Message{
-					Role:    schema.Assistant,
-					Content: a.prompts.IntentFailedRecovery})
-			}
-			state.History = msgs
-			output = msgs
-			return nil
-		})
-	return output, nil
-}
-
-// ========== Intent Branch ==========
-// route the task to different branch based on the classified intent
-func (a *CinnaReactAgent) AddIntentBranch() {
-	endNodes := map[string]bool{}
-	endNodes[listShoppingItemsLambdaNodeName] = true
-	endNodes[cinnaChatNodeName] = true
-	a.graph.AddBranch(intentLambdaNodeName, compose.NewGraphBranch(a.intentBranch, endNodes))
-}
-
-func (a *CinnaReactAgent) intentBranch(ctx context.Context, out []*schema.Message) (string, error) {
-	var next string
-	compose.ProcessState[*CinnaAgentState](
-		ctx, func(ctx context.Context, state *CinnaAgentState) error {
-			switch state.ChatIntent {
-			case IntentShopping:
-				next = listShoppingItemsLambdaNodeName // we just put this as a place holder
-			case IntentOther:
-				next = cinnaChatNodeName
-			default:
-				next = cinnaChatNodeName
-			}
-			return nil
-		})
-	return next, nil
 }
 
 // ========== List Shopping Items Lambda ==========
@@ -218,6 +93,34 @@ func (a *CinnaReactAgent) listShoppingListItems(
 	return finalListMessage
 }
 
+// ========== Shopping Action Branch ==========
+// route the task to different branch based on the classified intent
+func (a *CinnaReactAgent) AddShoppingActionBranch() {
+	endNodes := map[string]bool{}
+	endNodes[shoppingTasksPlannerLLMNodeName] = true
+	endNodes[cinnaChatNodeName] = true
+	a.graph.AddBranch(
+		listShoppingItemsLambdaNodeName,
+		compose.NewGraphBranch(a.shoppingActionBranch, endNodes))
+}
+
+func (a *CinnaReactAgent) shoppingActionBranch(ctx context.Context, out []*schema.Message) (string, error) {
+	var next string
+	compose.ProcessState[*CinnaAgentState](
+		ctx, func(ctx context.Context, state *CinnaAgentState) error {
+			switch state.ActionType {
+			case ActionUpdate:
+				next = shoppingTasksPlannerLLMNodeName // we just put this as a place holder
+			case ActionList:
+				next = cinnaChatNodeName
+			default:
+				next = cinnaChatNodeName
+			}
+			return nil
+		})
+	return next, nil
+}
+
 // ========== Shopping List Update Planner ==========
 // Plans the task based on the database and user's description
 // in: []*schema.Message | out: *schema.Message
@@ -240,6 +143,7 @@ func (a *CinnaReactAgent) prepareForShoppingTaskPlanning(
 // ========== Update Shopping List Lambda ==========
 // parse the output from the planner, and execute commands
 // in: *schema.Message | out: []*schema.Message
+
 type ShoppingListCommandParams struct {
 	ItemIds    []int64
 	ItemNames  []string
@@ -247,6 +151,31 @@ type ShoppingListCommandParams struct {
 }
 
 type ShoppingListCommands map[DBMethod]*ShoppingListCommandParams
+
+func (a *CinnaReactAgent) AddRunShoppingTaskLambdaNode() {
+	a.graph.AddLambdaNode(
+		shoppingTaskRunLambdaNodeName,
+		compose.InvokableLambda[*schema.Message, []*schema.Message](a.runShoppingListCommands),
+	)
+}
+
+func (a *CinnaReactAgent) runShoppingListCommands(
+	ctx context.Context, msg *schema.Message) ([]*schema.Message, error) {
+	// parse input message into commands
+	commands := a.parseShoppingListCommands(msg.Content)
+	var telegramUserID int64
+	var msgs []*schema.Message
+	compose.ProcessState[*CinnaAgentState](ctx,
+		func(ctx context.Context, state *CinnaAgentState) error {
+			telegramUserID = state.TelegramUserID
+			msgs = state.History
+			return nil
+		})
+	// execute commands
+	result := a.executeShoppingListCommands(ctx, telegramUserID, commands)
+	msgs = append(msgs, result)
+	return msgs, nil
+}
 
 func (a *CinnaReactAgent) parseShoppingListCommands(
 	rawMessage string) ShoppingListCommands {
@@ -380,62 +309,7 @@ func (a *CinnaReactAgent) executeShoppingListCommands(
 	}
 }
 
-// ========== Cinna Chat Model ==========
-//
-// The last llm node in the graph, generates user-facing response
-// in: []*schema.Message | out: *[]schema.Message
-func (a *CinnaReactAgent) AddCinnaResponseNode() {
-	a.graph.AddChatModelNode(cinnaChatNodeName, a.chatModel,
-		compose.WithStatePreHandler(a.prepareForCinnaChat))
-}
-
-func (a *CinnaReactAgent) prepareForCinnaChat(
-	ctx context.Context,
-	input []*schema.Message,
-	state *CinnaAgentState) ([]*schema.Message, error) {
-	msgs := organizeInputMessage(input, a.prompts.CinnaPersona)
-	state.SystemMessage = a.prompts.CinnaPersona
-	state.History = msgs
-	return msgs, nil
-}
-
 // ========== Helper functions ==========
-
-func logMessages(title string, msgs []*schema.Message) {
-	fmt.Println()
-	fmt.Println("Start Logging", title)
-	for _, msg := range msgs {
-		fmt.Println(fmt.Sprintf("[%s] %s", msg.Role, msg.Content))
-	}
-	fmt.Println()
-}
-
-func organizeInputMessage(input []*schema.Message, systemPrompt string) []*schema.Message {
-	// inject intent classification prompt
-	msgs := []*schema.Message{
-		&schema.Message{Role: schema.System, Content: systemPrompt}}
-	// include Tool and Assistant chat history
-	for _, msg := range input {
-		if msg.Role == schema.System {
-			continue // we just ignore system message here
-		} else {
-			msgs = append(msgs, msg)
-		}
-	}
-	return msgs
-}
-
-// exclude unnecessary messages from the collection of message
-func cleanupOutputMessage(output []*schema.Message) []*schema.Message {
-	msgs := []*schema.Message{}
-	for _, msg := range output {
-		if msg.Role == schema.System {
-			continue
-		}
-		msgs = append(msgs, msg)
-	}
-	return msgs
-}
 
 // formate shopping list item name
 func formatItemName(item sqlc.ShoppingList) string {
