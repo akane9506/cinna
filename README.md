@@ -1,8 +1,17 @@
 # Cinna
 
 Cinna is a Telegram assistant written in Go. It uses PostgreSQL for access
-control, an Eino chat graph for responses, DeepSeek as the chat model, and
-short-term in-memory chat history per Telegram user.
+control and per-user shopping lists, an Eino graph to route and execute tasks,
+DeepSeek for classification, planning, and replies, and short-term in-memory
+chat history per Telegram user.
+
+Current capabilities include:
+
+- Telegram long polling in development and webhooks in production
+- PostgreSQL-backed Telegram user allow-listing
+- Shopping-list listing, addition, removal, and modification
+- Batched shopping-list updates with category assignment
+- General chat with the embedded Cinna persona
 
 ## Agent Graph
 
@@ -14,21 +23,19 @@ flowchart LR
 
     IntentClassifier --> IntentLambda["Intent Validation Lambda<br/><br/>Validates intent classification node output<br/>and feeds intention to output branching<br/><br/>In: schema.Message<br/>Out: schema.Message[]"]
 
-    IntentLambda --> IntentRouter{"Branch by Intent<br/><br/>Intent:<br/>SHOPPING | FEEDBACK | OTHER"}
+    IntentLambda --> IntentRouter{"Branch by Intent<br/><br/>SHOPPING | FEEDBACK | OTHER"}
 
-    IntentRouter -- SHOPPING --> ListLambda["List Lambda<br/><br/>Lists contents in the shopping list table<br/><br/>Note:<br/>1. List expired items<br/>2. Items include categories<br/>3. Notify Cinna to respond with the corresponding category<br/><br/>In: schema.Message[]<br/>Out: schema.Message[]"]
+    IntentRouter -- SHOPPING --> ListLambda["Load Shopping List<br/><br/>Loads the user's active and expired items<br/>with IDs and categories<br/><br/>In: schema.Message[]<br/>Out: schema.Message[]"]
 
-    ListLambda --> ActionRouter{"Branch by Action Type<br/><br/>Action:<br/>LIST | UPDATE | None"}
+    ListLambda --> ActionRouter{"Branch by Action<br/><br/>LIST | UPDATE | NONE"}
 
-    ActionRouter -- UPDATE --> ShoppingPlanner["ShoppingPlanner<br/><br/>Reads user-Cinna chat history<br/>and decides the Shopping DB operation<br/><br/>In: schema.Message[]<br/>Out: schema.Message"]
+    ActionRouter -- UPDATE --> ShoppingPlanner["Shopping Planner<br/><br/>Plans batched ADD, REMOVE, and MODIFY<br/>commands from chat history and current items<br/><br/>In: schema.Message[]<br/>Out: schema.Message"]
 
-    ActionRouter -- LIST --> CinnaReply["CinnaReply"]
+    ShoppingPlanner --> ShoppingExecutor["Execute Shopping Commands<br/><br/>Validates commands and updates PostgreSQL<br/><br/>In: schema.Message<br/>Out: schema.Message[]"]
 
-    ShoppingPlanner --> ShoppingOutput["Shopping JSON<br/><br/>{<br/>category: string<br/>action: string<br/>item: string<br/>}"]
-
-    ShoppingOutput --> CinnaReply
-
-    IntentRouter -- OTHER --> CinnaReply
+    ShoppingExecutor --> CinnaReply["Cinna Reply"]
+    ActionRouter -- LIST/NONE --> CinnaReply
+    IntentRouter -- FEEDBACK/OTHER --> CinnaReply
 
     CinnaReply --> End([END])
 ```
@@ -104,12 +111,14 @@ docker compose exec -T postgres \
   psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" < db/schema.sql
 ```
 
-Validate that the allow-list table exists:
+Validate that the required tables and shopping category type exist:
 
 ```bash
 docker compose exec postgres \
   psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
-  -c "\d allowed_users"
+  -c "\d allowed_users" \
+  -c "\d shopping_list" \
+  -c "\dT+ shopping_category"
 ```
 
 Generate Go code from the SQL queries:
@@ -140,6 +149,36 @@ docker compose exec postgres \
   -c "SELECT * FROM allowed_users ORDER BY updated_at;"
 ```
 
+Shopping-list rows reference `allowed_users`, so a Telegram user must be in
+the allow list before Cinna can store items for them.
+
+## Shopping Lists
+
+Cinna supports natural-language requests to:
+
+- list the current shopping list;
+- add one or more items;
+- remove existing items; and
+- modify an item's name or category.
+
+The supported categories are `grocery`, `pharmacy`, `pet`, `toy`,
+`stationery`, and `other`. Item names are unique per user after trimming and
+case normalization. Adding an existing name updates its category and
+`updated_at` timestamp instead of creating a duplicate.
+
+When Cinna reads a list, it separates active items from items whose
+`updated_at` timestamp is older than one month. Expired items remain in the
+database and can still be modified or removed.
+
+Example requests:
+
+```text
+Show me my shopping list.
+Add milk, cat litter, and a notebook to my shopping list.
+Remove the milk.
+Change the notebook to an A4 notebook.
+```
+
 ## Run
 
 Run Cinna locally with Telegram long polling:
@@ -153,19 +192,22 @@ receiver, and serves it on `PORT` or `8080`.
 
 ## Agent
 
-The current agent path is:
+The main request path is:
 
 ```text
 Telegram message
   -> allow-list middleware
-  -> Cinna Eino graph
-  -> DeepSeek chat model
+  -> intent and action classification
+  -> shopping-list lookup (shopping requests only)
+  -> shopping command planning and PostgreSQL updates (updates only)
+  -> Cinna response generation
   -> Telegram response
 ```
 
-The agent injects the Cinna persona prompt from `internal/app/agent/prompt/`,
-stores non-system messages in an in-memory per-user history, and sends typing
-actions while it waits for a response.
+The prompts under `internal/app/agent/prompt/` are embedded into the binary.
+The agent stores user and final assistant messages in an in-memory, per-user
+history and sends typing actions while it waits for a response. This history
+is reset when the process restarts; shopping-list data remains in PostgreSQL.
 
 ## SQL Commands
 
@@ -214,17 +256,21 @@ RUN_MANUAL_TEST=1 go test ./internal/app/agent \
   -run 'TestDeepseekFlash(Model|JSON)Manual' -v
 ```
 
-Run the Cinna agent chat graph check:
+Run the manual agent graph checks:
 
 ```bash
 RUN_MANUAL_TEST=1 go test ./internal/app/agent \
-  -run TestCinnaChat -v
+  -run 'Test(CinnaChat|IntentLambda|TaskPlanningNode)$' -v
 ```
 
-If you already loaded `.env`, make sure it includes:
+The model checks only require `DEEPSEEK_API_KEY`. The agent graph checks load
+the application configuration, so `.env` must also contain
+`TELEGRAM_BOT_TOKEN` and `DATABASE_URL` even though these focused checks do not
+connect to Telegram or PostgreSQL.
+
+If you already loaded `.env`, enable manual tests with:
 
 ```dotenv
-DEEPSEEK_API_KEY=your_deepseek_api_key
 RUN_MANUAL_TEST=1
 ```
 
@@ -240,14 +286,13 @@ cinna/
 ├── internal/
 │   ├── app/
 │   │   ├── agent/
+│   │   │   ├── memory/
+│   │   │   └── prompt/
 │   │   ├── ports/
 │   │   └── telegram/
 │   ├── postgres/
 │   │   └── sqlc/
 │   └── utils/
-├── prompts/
-│   ├── core/
-│   └── shopping/
 ├── compose.yaml
 ├── go.mod
 └── sqlc.yaml
