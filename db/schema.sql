@@ -56,3 +56,24 @@ CREATE UNIQUE INDEX IF NOT EXISTS shopping_list_user_name_unique_idx
         telegram_user_id,
         lower(btrim(name))
     );
+
+-- Table for agent conversation memory
+-- Runtime only uses recent messages, but DB preserves a longer window
+CREATE TABLE IF NOT EXISTS agent_memory(
+    id BIGSERIAL PRIMARY KEY,
+
+    telegram_user_id BIGINT NOT NULL
+        REFERENCES allowed_users(telegram_user_id)
+        ON DELETE CASCADE,
+
+    role TEXT NOT NULL
+        CHECK (role IN ('user', 'assistant')),
+
+    content TEXT NOT NULL
+        CHECK (length(content) > 0),
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS agent_memory_user_id_idx
+    ON agent_memory (telegram_user_id, id DESC)
