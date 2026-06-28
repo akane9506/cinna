@@ -95,13 +95,22 @@ func (a *CinnaReactAgent) BuildGraph(
 	a.AddProcessInputLambdaNode()
 	a.AddIntentClassificationNode()
 	a.AddIntentOutputLambdaNode()
+	// shopping branch
 	a.AddListShoppingItemsLambda()
+	a.AddShoppingTaskPlanningNode()
+	a.AddRunShoppingTaskLambdaNode()
+	// Cinna response
 	a.AddCinnaResponseNode()
+
+	// edges
 	graph.AddEdge(compose.START, processInputLambdaNodeName)
 	graph.AddEdge(processInputLambdaNodeName, intentLLMNodeName)
 	graph.AddEdge(intentLLMNodeName, intentLambdaNodeName)
 	a.AddIntentBranch()
-	graph.AddEdge(listShoppingItemsLambdaNodeName, cinnaChatNodeName)
+	// shopping branch
+	a.AddShoppingActionBranch()
+	graph.AddEdge(shoppingTasksPlannerLLMNodeName, shoppingTaskRunLambdaNodeName)
+	graph.AddEdge(shoppingTaskRunLambdaNodeName, cinnaChatNodeName)
 	graph.AddEdge(cinnaChatNodeName, compose.END)
 	runnable, err := graph.Compile(ctx)
 	if err != nil {
