@@ -37,6 +37,12 @@ func CheckSchema(ctx context.Context, pool *pgxpool.Pool) error {
 			SELECT 1
 			FROM pg_type
 			WHERE typname = 'shopping_category'
+		)
+		AND EXISTS (
+			SELECT 1
+			FROM information_schema.tables
+			WHERE table_schema = 'public'
+				AND table_name = 'agent_memory'
 		);
 	`
 	var ok bool
