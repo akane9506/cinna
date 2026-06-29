@@ -1,53 +1,171 @@
 package memory
 
 import (
+	"context"
+	"log/slog"
 	"sync"
 
+	"github.com/akane9506/cinna/internal/app/ports"
 	"github.com/cloudwego/eino/schema"
 )
 
-const defaultMaxLength = 30 // 30 histories,  including assistant and user msg, should be enough
+const (
+	// number of history messages for conversation,  including assistant and user msg, should be enough
+	defaultMaxChatLength = 30
 
-type InMemoryStore struct {
-	mu        sync.RWMutex
-	mem       map[int64][]schema.Message
-	maxLength int
+	// number of history stored in the database
+	defaultMaxDBLength = 100
+
+	// flush buffer to the history db when buffer size equals or higher than this threshold
+	defaultFlushBufferThreshold = 6
+)
+
+type MemoryStore struct {
+	mu                   sync.RWMutex // protects the user map only
+	maxChatLength        int
+	maxDBLength          int
+	flushBufferThreshold int
+
+	users       map[int64]*userState
+	agentMemory ports.AgentMemoryRepository
+
+	logger *slog.Logger
+}
+
+type userState struct {
+	mu      sync.Mutex // protects user's buffer and history read/write
+	history []schema.Message
+	buffer  []schema.Message
+	loaded  bool
 }
 
 // create a memory store
-func NewImMemoryStore() *InMemoryStore {
-	store := &InMemoryStore{
-		mem:       map[int64][]schema.Message{},
-		maxLength: defaultMaxLength,
+func NewMemoryStore(agentMemoryRepo ports.AgentMemoryRepository, logger *slog.Logger) *MemoryStore {
+	store := &MemoryStore{
+		users:                map[int64]*userState{},
+		maxChatLength:        defaultMaxChatLength,
+		maxDBLength:          defaultMaxDBLength,
+		flushBufferThreshold: defaultFlushBufferThreshold,
+		agentMemory:          agentMemoryRepo,
+		logger:               logger,
 	}
-	// Implement DB data retrieval here
-	//
 	return store
 }
 
-func (m *InMemoryStore) Append(userID int64, msg *schema.Message) {
+func (m *MemoryStore) Append(ctx context.Context, userID int64, msg *schema.Message) {
 	// we don't store system message.
 	// because system message were inserted into the memory
 	if msg == nil || msg.Role == schema.System {
 		return
 	}
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	history := append(m.mem[userID], *msg)
-	if len(history) > m.maxLength {
-		history = history[len(history)-m.maxLength:]
+	userState := m.getUserState(userID)
+	userState.mu.Lock()
+	defer userState.mu.Unlock()
+	// exclude reasoning and other token-consuming information
+	cleanMessage := schema.Message{Role: msg.Role, Content: msg.Content}
+	history := append(userState.history, cleanMessage)
+	userState.buffer = append(userState.buffer, cleanMessage)
+	if len(history) > m.maxChatLength {
+		history = history[len(history)-m.maxChatLength:]
 	}
-	m.mem[userID] = history
+	// check buffer size and decide whether to update db or not
+	if m.shouldFlushBuffer(userState) {
+		if err := m.flushBuffer(ctx, userID, userState); err != nil {
+			m.logger.Error("failed flush buffer history to DB",
+				"telegram_user_id", userID,
+				"error", err,
+			)
+		}
+	}
+	userState.history = history
 }
 
-func (m *InMemoryStore) Get(userID int64) []*schema.Message {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
-	history := m.mem[userID]
-	output := make([]*schema.Message, 0, len(history))
-	for _, msg := range history {
+func (m *MemoryStore) Get(ctx context.Context, userID int64) []*schema.Message {
+	userState := m.getUserState(userID)
+	userState.mu.Lock()
+	defer userState.mu.Unlock()
+	if !userState.loaded {
+		history, err := m.loadHistoryFromDB(ctx, userID)
+		if err != nil {
+			m.logger.Error("failed to load chat history from db",
+				"telegram_user_id", userID, "error", err)
+		} else {
+			userState.history = history
+		}
+		// we let it loaded even when there's an error, to avoid keep calling DB
+		userState.loaded = true
+	}
+	output := make([]*schema.Message, 0, len(userState.history))
+	for _, msg := range userState.history {
 		output = append(output, &msg)
 	}
 	return output
+}
+
+// ========== user state map operations ==========
+
+func (m *MemoryStore) getUserState(userID int64) *userState {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	state := m.users[userID]
+	if state == nil {
+		state = &userState{}
+		m.users[userID] = state
+	}
+	return state
+}
+
+// ========== DB memory operations ==========
+func (m *MemoryStore) shouldFlushBuffer(userState *userState) bool {
+	return len(userState.buffer) >= m.flushBufferThreshold
+}
+
+func (m *MemoryStore) flushBuffer(ctx context.Context, userID int64, userState *userState) error {
+	roles := []string{}
+	contents := []string{}
+	for _, message := range userState.buffer {
+		role := message.Role
+		if role != schema.Assistant && role != schema.User {
+			continue
+		}
+		roles = append(roles, string(role))
+		contents = append(contents, message.Content)
+	}
+	_, err := m.agentMemory.AppendAgentMemoryBatch(ctx, userID, roles, contents)
+	if err == nil {
+		// if flush succeeded, clear the buffer
+		userState.buffer = []schema.Message{}
+	}
+	// ALSO IMPLEMENT
+	return err
+}
+
+func (m *MemoryStore) loadHistoryFromDB(ctx context.Context, userID int64) ([]schema.Message, error) {
+	parsedHistory := []schema.Message{}
+	logger := m.logger.With("path", "internal/app/agent/memory/state/loadHistoryFromDB")
+	dbHistory, err := m.agentMemory.ListRecentAgentMemory(ctx, userID, int32(m.maxChatLength))
+	if err != nil {
+		return parsedHistory, err
+	}
+	for _, message := range dbHistory {
+		if message.TelegramUserID != userID {
+			logger.Warn(
+				"wrong message fetched",
+				"user_id", userID,
+				"fetched_user_id", message.TelegramUserID,
+			)
+			continue
+		}
+		switch schema.RoleType(message.Role) {
+		case schema.Assistant:
+			parsedHistory = append(parsedHistory,
+				schema.Message{Role: schema.Assistant, Content: message.Content})
+		case schema.User:
+			parsedHistory = append(parsedHistory,
+				schema.Message{Role: schema.User, Content: message.Content})
+		default:
+			logger.Warn("wrong message role detected", "role", string(message.Role))
+		}
+	}
+	return parsedHistory, nil
 }

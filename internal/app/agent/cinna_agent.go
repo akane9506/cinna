@@ -20,7 +20,7 @@ type CinnaReactAgent struct {
 	graph     *compose.Graph[*TaskInput, *schema.Message]
 	prompts   *prompt.Prompts
 	runner    compose.Runnable[*TaskInput, *schema.Message]
-	store     *memory.InMemoryStore
+	store     *memory.MemoryStore
 	repos     *ports.Repositories
 	logger    *slog.Logger
 }
@@ -36,6 +36,7 @@ func NewCinnaReactAgent(
 		return nil, err
 	}
 	agent.repos = repos
+	agent.store = memory.NewMemoryStore(repos.AgentMemory, agent.logger)
 	// compile graph and create a runner
 	runner, err := agent.BuildGraph(ctx)
 	if err != nil {
@@ -66,8 +67,6 @@ func initializeBaseAgent(
 	if err != nil {
 		return nil, fmt.Errorf("failed to create cinna react agent: %w", err)
 	}
-	// initialize in-memory store (state)
-	store := memory.NewImMemoryStore()
 	// initialize graph with local chat history state
 	graph := compose.NewGraph[*TaskInput, *schema.Message](
 		compose.WithGenLocalState(func(ctx context.Context) (state *CinnaAgentState) {
@@ -82,7 +81,6 @@ func initializeBaseAgent(
 		jsonModel: jsonModel,
 		graph:     graph,
 		prompts:   prompts,
-		store:     store,
 		logger:    logger,
 	}
 	return agent, nil
