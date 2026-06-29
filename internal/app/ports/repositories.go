@@ -9,6 +9,7 @@ import (
 type Repositories struct {
 	AllowList    AllowListRepository
 	ShoppingList ShoppingListRepository
+	AgentMemory  AgentMemoryRepository
 }
 
 type AllowListRepository interface {
@@ -35,4 +36,25 @@ type ShoppingListRepository interface {
 		ctx context.Context,
 		telegramUserID int64,
 	) ([]sqlc.ShoppingList, error)
+}
+
+type AgentMemoryRepository interface {
+	ListRecentAgentMemory(
+		ctx context.Context,
+		telegramUserID int64,
+		maxHistoryLength int32,
+	) ([]sqlc.AgentMemory, error)
+
+	AppendAgentMemoryBatch(
+		ctx context.Context,
+		telegramUserID int64,
+		roles []string,
+		contents []string,
+	) ([]sqlc.AgentMemory, error)
+
+	PruneAgentMemory(
+		ctx context.Context,
+		telegramUserID int64,
+		keepCount int32,
+	) error
 }

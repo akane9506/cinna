@@ -22,7 +22,7 @@ func (a *CinnaReactAgent) HandleText(
 	)
 	// concat in-memory message history and the most recent user message
 	userMessage := schema.UserMessage(text)
-	messages := a.store.Get(userID)
+	messages := a.store.Get(ctx, userID)
 	messages = append(messages, userMessage)
 
 	input := &TaskInput{
@@ -35,7 +35,7 @@ func (a *CinnaReactAgent) HandleText(
 		logger.Error("failed to get cinna response", "user_id", userID, "error", err)
 		return "", err
 	}
-	a.store.Append(userID, userMessage)
-	a.store.Append(userID, result)
+	a.store.Append(ctx, userID, userMessage)
+	a.store.Append(ctx, userID, result)
 	return result.Content, nil
 }
