@@ -34,17 +34,9 @@ func (a *AgentMemoryRepository) ListRecentAgentMemory(
 
 func (a *AgentMemoryRepository) AppendAgentMemoryBatch(
 	ctx context.Context,
-	telegramUserID int64,
-	roles []string,
-	contents []string,
+	params sqlc.AppendAgentMemoryBatchParams,
 ) ([]sqlc.AgentMemory, error) {
-	return a.queries.AppendAgentMemoryBatch(
-		ctx,
-		sqlc.AppendAgentMemoryBatchParams{
-			TelegramUserID: telegramUserID,
-			Roles:          roles,
-			Contents:       contents,
-		})
+	return a.queries.AppendAgentMemoryBatch(ctx, params)
 }
 
 func (a *AgentMemoryRepository) PruneAgentMemory(

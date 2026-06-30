@@ -2,10 +2,12 @@ package memory
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"sync"
 
 	"github.com/akane9506/cinna/internal/app/ports"
+	"github.com/akane9506/cinna/internal/postgres/sqlc"
 	"github.com/cloudwego/eino/schema"
 )
 
@@ -54,7 +56,7 @@ func NewMemoryStore(agentMemoryRepo ports.AgentMemoryRepository, logger *slog.Lo
 
 func (m *MemoryStore) Append(ctx context.Context, userID int64, msg *schema.Message) {
 	// we don't store system message.
-	// because system message were inserted into the memory
+	// because system message will be inserted into the chat right before invoking the chat model
 	if msg == nil || msg.Role == schema.System {
 		return
 	}
@@ -71,7 +73,7 @@ func (m *MemoryStore) Append(ctx context.Context, userID int64, msg *schema.Mess
 	// check buffer size and decide whether to update db or not
 	if m.shouldFlushBuffer(userState) {
 		if err := m.flushBuffer(ctx, userID, userState); err != nil {
-			m.logger.Error("failed flush buffer history to DB",
+			m.logger.Error("error flush buffer history to DB",
 				"telegram_user_id", userID,
 				"error", err,
 			)
@@ -131,13 +133,22 @@ func (m *MemoryStore) flushBuffer(ctx context.Context, userID int64, userState *
 		roles = append(roles, string(role))
 		contents = append(contents, message.Content)
 	}
-	_, err := m.agentMemory.AppendAgentMemoryBatch(ctx, userID, roles, contents)
-	if err == nil {
-		// if flush succeeded, clear the buffer
-		userState.buffer = []schema.Message{}
+	_, err := m.agentMemory.AppendAgentMemoryBatch(ctx, sqlc.AppendAgentMemoryBatchParams{
+		TelegramUserID: userID,
+		Roles:          roles,
+		Contents:       contents,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to flush buffer: %w", err)
 	}
-	// ALSO IMPLEMENT
-	return err
+	// if flush succeeded, clear the buffer
+	userState.buffer = []schema.Message{}
+	// and prune the agent memory size
+	err = m.agentMemory.PruneAgentMemory(ctx, userID, int32(m.maxDBLength))
+	if err != nil {
+		return fmt.Errorf("failed to prune history: %w", err)
+	}
+	return nil
 }
 
 func (m *MemoryStore) loadHistoryFromDB(ctx context.Context, userID int64) ([]schema.Message, error) {

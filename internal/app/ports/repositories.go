@@ -47,9 +47,7 @@ type AgentMemoryRepository interface {
 
 	AppendAgentMemoryBatch(
 		ctx context.Context,
-		telegramUserID int64,
-		roles []string,
-		contents []string,
+		params sqlc.AppendAgentMemoryBatchParams,
 	) ([]sqlc.AgentMemory, error)
 
 	PruneAgentMemory(
