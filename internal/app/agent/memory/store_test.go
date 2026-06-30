@@ -255,5 +255,139 @@ func TestLoadHistoryFromDB(t *testing.T) {
 			}
 		})
 	}
+}
 
+func TestAppend(t *testing.T) {
+	mockLogger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	mockMemoryRepo := new(mockAgentMemoryRepo)
+	// t.Parallel()
+	tests := []struct {
+		name            string
+		msg             *schema.Message
+		flushBuffer     bool
+		exceedMaxLength bool
+		invalidMessage  bool
+	}{
+		{
+			name: "without flush buffer",
+			msg:  &schema.Message{Role: schema.Assistant, Content: "assistant", ToolCallID: "123"},
+		},
+		{
+			name:            "with exceeded chat length",
+			msg:             &schema.Message{Role: schema.Assistant, Content: "assistant"},
+			exceedMaxLength: true,
+		},
+		{
+			name:        "with flush buffer",
+			msg:         &schema.Message{Role: schema.Assistant, Content: "assistant"},
+			flushBuffer: true,
+		},
+		{
+			name:           "with invalid message type",
+			msg:            &schema.Message{Role: schema.System, Content: "system"},
+			invalidMessage: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			store := NewMemoryStore(mockMemoryRepo, mockLogger)
+			store.users[mockTelegramUserID] = &userState{}
+			ctx := context.Background()
+			if tt.exceedMaxLength {
+				store.users[mockTelegramUserID].history = make([]schema.Message, defaultMaxChatLength+4)
+				assert.Equal(t, len(store.users[mockTelegramUserID].history), defaultMaxChatLength+4)
+			}
+			if tt.flushBuffer {
+				store.users[mockTelegramUserID].buffer = make([]schema.Message, defaultFlushBufferThreshold+1)
+				assert.Equal(t, len(store.users[mockTelegramUserID].buffer), defaultFlushBufferThreshold+1)
+			}
+			if tt.flushBuffer {
+				mockMemoryRepo.On("AppendAgentMemoryBatch",
+					mock.Anything,
+					mock.Anything,
+				).Return([]sqlc.AgentMemory{}, nil).Once()
+				mockMemoryRepo.On("PruneAgentMemory",
+					mock.Anything,
+					mock.AnythingOfType("int64"),
+					mock.AnythingOfType("int32"),
+				).Return(nil).Once()
+			}
+			store.Append(ctx, mockTelegramUserID, tt.msg)
+			userState := store.users[mockTelegramUserID]
+			assert.NotNil(t, userState)
+			if !tt.invalidMessage {
+				lastMsg := userState.history[len(userState.history)-1]
+				assert.Equal(t, lastMsg.Content, tt.msg.Content)
+				if tt.msg.ToolCallID != "" {
+					assert.NotEqual(t, lastMsg.ToolCallID, tt.msg.ToolCallID)
+				}
+			} else {
+				assert.Equal(t, len(userState.history), 0)
+			}
+			assert.LessOrEqual(t, len(userState.history), defaultMaxChatLength)
+			assert.Less(t, len(userState.buffer), defaultFlushBufferThreshold)
+		})
+	}
+}
+
+func TestGet(t *testing.T) {
+	mockLogger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	mockMemoryRepo := new(mockAgentMemoryRepo)
+	tests := []struct {
+		name          string
+		loaded        bool
+		localHistory  []schema.Message
+		remoteHistory []sqlc.AgentMemory
+	}{
+		{
+			name:         "get local history",
+			loaded:       true,
+			localHistory: []schema.Message{{Role: schema.User, Content: "hello"}},
+		},
+		{
+			name:         "get remote history",
+			loaded:       false,
+			localHistory: []schema.Message{{Role: schema.User, Content: "hello"}},
+			remoteHistory: []sqlc.AgentMemory{
+				{
+					TelegramUserID: mockTelegramUserID,
+					Role:           string(schema.Assistant),
+					Content:        "assistant",
+				},
+				{
+					TelegramUserID: mockTelegramUserID,
+					Role:           string(schema.User),
+					Content:        "user",
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(*testing.T) {
+			store := NewMemoryStore(mockMemoryRepo, mockLogger)
+			userState := &userState{}
+			store.users[mockTelegramUserID] = userState
+			ctx := context.Background()
+			if tt.loaded {
+				userState.loaded = true
+				userState.history = tt.localHistory
+			} else {
+				mockMemoryRepo.On("ListRecentAgentMemory",
+					mock.Anything,
+					mock.AnythingOfType("int64"),
+					mock.AnythingOfType("int32"),
+				).Return(tt.remoteHistory, nil).Once()
+			}
+			result := store.Get(ctx, mockTelegramUserID)
+			for idx, msg := range result {
+				if tt.loaded {
+					assert.Equal(t, tt.localHistory[idx], *msg)
+				} else {
+					assert.Equal(t, tt.remoteHistory[idx].Role, string(msg.Role))
+					assert.Equal(t, tt.remoteHistory[idx].Content, string(msg.Content))
+				}
+			}
+		})
+	}
 }
