@@ -13,8 +13,11 @@ const (
 	webhookURLEnv       = "WEBHOOK_URL"
 	webhookSecretEnv    = "WEBHOOK_SECRET"
 	dbURLEnv            = "DATABASE_URL"
-	// llm keys are not mandatory; they will be check in model creation
+	// LLM key
 	deepseekEnv = "DEEPSEEK_API_KEY"
+	// Encryption key
+	messageEncryptionKeyIDEnv = "MESSAGE_ENCRYPTION_KEY_ID"
+	messageEncryptionKeyEnv   = "MESSAGE_ENCRYPTION_KEY"
 )
 
 const (
@@ -23,12 +26,14 @@ const (
 )
 
 type Config struct {
-	RuntimeEnv       string
-	TelegramBotToken string
-	WebhookURL       string
-	WebhookSecret    string
-	DatabaseURL      string
-	DeepseekAPIKey   string
+	RuntimeEnv             string
+	TelegramBotToken       string
+	WebhookURL             string
+	WebhookSecret          string
+	DatabaseURL            string
+	DeepseekAPIKey         string
+	MessageEncryptionKeyID string
+	MessageEncryptionKey   string
 }
 
 func LoadConfig() (*Config, error) {
@@ -76,6 +81,18 @@ func LoadConfig() (*Config, error) {
 	// setup LLM API keys
 	deepseekAPIKey := strings.TrimSpace(os.Getenv(deepseekEnv))
 	config.DeepseekAPIKey = deepseekAPIKey
+
+	// setup encryption params
+	messageEncryptionKey := strings.TrimSpace(os.Getenv(messageEncryptionKeyEnv))
+	if messageEncryptionKey == "" {
+		return nil, fmt.Errorf("%s is required", messageEncryptionKeyEnv)
+	}
+	messageEncryptionKeyID := strings.TrimSpace(os.Getenv(messageEncryptionKeyIDEnv))
+	if messageEncryptionKeyID == "" {
+		return nil, fmt.Errorf("%s is required", messageEncryptionKeyIDEnv)
+	}
+	config.MessageEncryptionKeyID = messageEncryptionKeyID
+	config.MessageEncryptionKey = messageEncryptionKey
 
 	return config, nil
 }

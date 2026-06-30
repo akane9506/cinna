@@ -8,6 +8,8 @@ import (
 
 var mockDBUrl string = "postgres://a:a_pswrd@localhost:5432/cinna"
 var mockDeepseekAPIKey string = "deepseek_api_key"
+var mockMessageEncKey = "key"
+var mockMessageEncKeyID = "abcdef"
 
 func TestLoadConfig(t *testing.T) {
 	tests := []struct {
@@ -18,23 +20,31 @@ func TestLoadConfig(t *testing.T) {
 		deepseekAPIEnv             string
 		webhookUrlEnv              string
 		webhookSecretEnv           string
+		messageEncKeyID            string
+		messageEncKey              string
 		expected                   *Config
 		expectedRuntimeError       bool
 		expectDBUrlError           bool
 		expectTelegramError        bool
-		expectedWebhookUrlError    bool
-		expectedWebhookSecretError bool
+		expectWebhookUrlError      bool
+		expectWebhookSecretError   bool
+		expectMessageEncKeyError   bool
+		expectMessageEncKeyIDError bool
 	}{
 		{
-			name:           "success in development",
-			telegramEnv:    "abc",
-			dbUrlEnv:       mockDBUrl,
-			deepseekAPIEnv: mockDeepseekAPIKey,
+			name:            "success in development",
+			telegramEnv:     "abc",
+			dbUrlEnv:        mockDBUrl,
+			deepseekAPIEnv:  mockDeepseekAPIKey,
+			messageEncKeyID: mockMessageEncKeyID,
+			messageEncKey:   mockMessageEncKey,
 			expected: &Config{
-				TelegramBotToken: "abc",
-				DatabaseURL:      mockDBUrl,
-				DeepseekAPIKey:   mockDeepseekAPIKey,
-				RuntimeEnv:       "development",
+				TelegramBotToken:       "abc",
+				DatabaseURL:            mockDBUrl,
+				DeepseekAPIKey:         mockDeepseekAPIKey,
+				RuntimeEnv:             "development",
+				MessageEncryptionKeyID: mockMessageEncKeyID,
+				MessageEncryptionKey:   mockMessageEncKey,
 			},
 		},
 		{
@@ -43,15 +53,19 @@ func TestLoadConfig(t *testing.T) {
 			telegramEnv:      "abc",
 			dbUrlEnv:         mockDBUrl,
 			deepseekAPIEnv:   mockDeepseekAPIKey,
+			messageEncKeyID:  mockMessageEncKeyID,
+			messageEncKey:    mockMessageEncKey,
 			webhookUrlEnv:    "https://localhost",
 			webhookSecretEnv: "secret",
 			expected: &Config{
-				TelegramBotToken: "abc",
-				RuntimeEnv:       "production",
-				DatabaseURL:      mockDBUrl,
-				DeepseekAPIKey:   mockDeepseekAPIKey,
-				WebhookURL:       "https://localhost",
-				WebhookSecret:    "secret",
+				TelegramBotToken:       "abc",
+				RuntimeEnv:             "production",
+				DatabaseURL:            mockDBUrl,
+				DeepseekAPIKey:         mockDeepseekAPIKey,
+				WebhookURL:             "https://localhost",
+				WebhookSecret:          "secret",
+				MessageEncryptionKeyID: mockMessageEncKeyID,
+				MessageEncryptionKey:   mockMessageEncKey,
 			},
 		},
 		{
@@ -76,19 +90,41 @@ func TestLoadConfig(t *testing.T) {
 			expectTelegramError: true,
 		},
 		{
-			name:                    "missing webhook in production",
-			dbUrlEnv:                mockDBUrl,
-			runtimeEnv:              "production",
-			telegramEnv:             "abc",
-			expectedWebhookUrlError: true,
+			name:                  "missing webhook in production",
+			dbUrlEnv:              mockDBUrl,
+			runtimeEnv:            "production",
+			telegramEnv:           "abc",
+			expectWebhookUrlError: true,
 		},
 		{
-			name:                       "missing websocket secret",
-			dbUrlEnv:                   mockDBUrl,
+			name:                     "missing websocket secret",
+			dbUrlEnv:                 mockDBUrl,
+			runtimeEnv:               "production",
+			telegramEnv:              "abc",
+			webhookUrlEnv:            "https://localhost",
+			expectWebhookSecretError: true,
+		},
+		{
+			name:                     "missing msg enc key in prod",
+			runtimeEnv:               "production",
+			telegramEnv:              "abc",
+			dbUrlEnv:                 mockDBUrl,
+			deepseekAPIEnv:           mockDeepseekAPIKey,
+			messageEncKeyID:          mockMessageEncKeyID,
+			webhookUrlEnv:            "https://localhost",
+			webhookSecretEnv:         "secret",
+			expectMessageEncKeyError: true,
+		},
+		{
+			name:                       "missing msg enc key in prod",
 			runtimeEnv:                 "production",
 			telegramEnv:                "abc",
+			dbUrlEnv:                   mockDBUrl,
+			deepseekAPIEnv:             mockDeepseekAPIKey,
+			messageEncKey:              mockMessageEncKey,
 			webhookUrlEnv:              "https://localhost",
-			expectedWebhookSecretError: true,
+			webhookSecretEnv:           "secret",
+			expectMessageEncKeyIDError: true,
 		},
 	}
 
@@ -100,16 +136,18 @@ func TestLoadConfig(t *testing.T) {
 			t.Setenv(webhookSecretEnv, tt.webhookSecretEnv)
 			t.Setenv(dbURLEnv, tt.dbUrlEnv)
 			t.Setenv(deepseekEnv, tt.deepseekAPIEnv)
+			t.Setenv(messageEncryptionKeyEnv, tt.messageEncKey)
+			t.Setenv(messageEncryptionKeyIDEnv, tt.messageEncKeyID)
 			config, err := LoadConfig()
 			if tt.expected == nil {
 				assert.Error(t, err)
 				if tt.expectTelegramError {
 					assert.Contains(t, err.Error(), telegramBotTokenEnv)
 				}
-				if tt.expectedWebhookUrlError {
+				if tt.expectWebhookUrlError {
 					assert.Contains(t, err.Error(), webhookURLEnv)
 				}
-				if tt.expectedWebhookSecretError {
+				if tt.expectWebhookSecretError {
 					assert.Contains(t, err.Error(), webhookSecretEnv)
 				}
 				if tt.expectedRuntimeError {
@@ -117,6 +155,12 @@ func TestLoadConfig(t *testing.T) {
 				}
 				if tt.expectDBUrlError {
 					assert.Contains(t, err.Error(), dbURLEnv)
+				}
+				if tt.expectMessageEncKeyError {
+					assert.Contains(t, err.Error(), messageEncryptionKeyEnv)
+				}
+				if tt.expectMessageEncKeyIDError {
+					assert.Contains(t, err.Error(), messageEncryptionKeyIDEnv)
 				}
 			} else {
 				assert.Equal(t, config, tt.expected)
