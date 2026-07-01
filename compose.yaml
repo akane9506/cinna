@@ -16,5 +16,11 @@ services:
       timeout: 5s
       retries: 5
 
+  gcp-deployment:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ${REGION}-docker.pkg.dev/${PROJECT_ID}/cinna/cinna:${IMAGE_TAG:-latest}
+
 volumes:
   cinna_postgres_data:

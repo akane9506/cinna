@@ -1,0 +1,39 @@
+.git
+.gitignore
+.dockerignore
+Dockerfile
+compose.yaml
+
+# Local configuration and credentials
+.env
+.env.*
+.firebase/
+
+# Documentation and repository tooling
+.agents/
+.codex/
+.github/
+.codebook.toml
+CODEX.md
+README.md
+LICENSE
+
+# Editor and operating-system files
+.DS_Store
+.idea/
+.vscode/
+*.log
+notes.md
+
+# Go build and test output
+bin/
+build/
+coverage/
+.cache/
+*.coverprofile
+*.test
+coverage.*
+**/*_test.go
+
+# Generated inside the builder stage
+internal/postgres/sqlc/

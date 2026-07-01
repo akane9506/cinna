@@ -197,6 +197,51 @@ go run ./cmd/cinna
 In production mode, Cinna configures the Telegram webhook, starts the webhook
 receiver, and serves it on `PORT` or `8080`.
 
+## Container Image
+
+The multi-stage `Dockerfile` builds a statically linked Linux `amd64` binary
+and copies it into a minimal Alpine runtime image. Build it locally with:
+
+```bash
+docker build -t cinna:latest .
+```
+
+Run the image in development mode with the host PostgreSQL port exposed by
+Compose. On Docker Desktop, `host.docker.internal` resolves to the host:
+
+```bash
+docker compose up -d postgres
+
+docker run --rm \
+  --env-file .env \
+  -e DATABASE_URL="postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@host.docker.internal:5432/${POSTGRES_DB}?sslmode=disable" \
+  cinna:latest
+```
+
+The `gcp-deployment` Compose service builds and tags the image for Google
+Artifact Registry. Set the registry location, Google Cloud project, and an
+optional immutable image tag before building and pushing:
+
+```bash
+export REGION=us-central1
+export PROJECT_ID=your-google-cloud-project
+export IMAGE_TAG=$(git rev-parse --short HEAD)
+
+gcloud auth configure-docker "${REGION}-docker.pkg.dev"
+gcloud artifacts repositories describe cinna \
+  --location "$REGION" \
+  --project "$PROJECT_ID"
+
+docker compose build gcp-deployment
+docker compose push gcp-deployment
+```
+
+The Artifact Registry repository named `cinna` must already exist. This
+Compose service builds and publishes the image; deploying it to a runtime such
+as Cloud Run is a separate step. Production runtime configuration must provide
+the variables listed in [Configuration](#configuration), including an HTTPS
+webhook URL and a database URL reachable from the deployed container.
+
 ## Agent
 
 The main request path is:
@@ -300,6 +345,8 @@ cinna/
 │   ├── postgres/
 │   │   └── sqlc/
 │   └── utils/
+├── .dockerignore
+├── Dockerfile
 ├── compose.yaml
 ├── go.mod
 └── sqlc.yaml
