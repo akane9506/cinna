@@ -16,6 +16,7 @@ import (
 	"github.com/akane9506/cinna/internal/app/telegram"
 	db "github.com/akane9506/cinna/internal/postgres"
 	"github.com/akane9506/cinna/internal/postgres/sqlc"
+	"github.com/akane9506/cinna/internal/security"
 )
 
 func main() {
@@ -48,11 +49,20 @@ func main() {
 		os.Exit(1)
 	}
 
+	// setup message encryption
+	messageCipher, err := security.NewMessageCipher(config.MessageEncryptionKeyID, map[string]string{
+		config.MessageEncryptionKeyID: config.MessageEncryptionKey,
+	})
+	if err != nil {
+		logger.Error("failed to initialize message cipher", "error", err)
+		os.Exit(1)
+	}
+
 	// setup repositories
 	queries := sqlc.New(pool)
 	allowlistRepo := db.NewAllowListRepository(queries)
 	shoppingListRepo := db.NewShoppingListRepository(queries)
-	agentMemory := db.NewAgentMemoryRepository(queries)
+	agentMemory := db.NewAgentMemoryRepository(queries, messageCipher, logger)
 	repos := &ports.Repositories{
 		AllowList:    allowlistRepo,
 		ShoppingList: shoppingListRepo,

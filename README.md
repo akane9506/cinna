@@ -63,10 +63,17 @@ GO_ENV=development
 TELEGRAM_BOT_TOKEN=your_telegram_bot_token
 DATABASE_URL=postgres://cinna:change_me@localhost:5432/cinna?sslmode=disable
 DEEPSEEK_API_KEY=your_deepseek_api_key
+MESSAGE_ENCRYPTION_KEY=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+MESSAGE_ENCRYPTION_KEY_ID=local-v1
 POSTGRES_USER=cinna
 POSTGRES_PASSWORD=change_me
 POSTGRES_DB=cinna
 ```
+
+The sample encryption key is for local development only. Generate a unique
+AES-256 key for production with `openssl rand -base64 32`. Preserve both that
+key and its stable `MESSAGE_ENCRYPTION_KEY_ID` across deployments so existing
+messages remain decryptable.
 
 Production webhook mode also requires:
 

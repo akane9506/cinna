@@ -41,6 +41,7 @@ func NewMessageCipher(activeKeyID string, encodedKeys map[string]string) (*Messa
 	return &MessageCipher{activeKeyID: activeKeyID, keys: keys}, nil
 }
 
+// encrypts message
 func (c *MessageCipher) Encrypt(userID int64, plaintext string) (string, error) {
 	if plaintext == "" {
 		return "", errors.New("cannot encrypt an empty message")
@@ -60,6 +61,7 @@ func (c *MessageCipher) Encrypt(userID int64, plaintext string) (string, error) 
 		"%s:%s:%s:%s", envelopePrefix, envelopeVersion, c.activeKeyID, encodedPayload), nil
 }
 
+// decrypts message
 func (c *MessageCipher) Decrypt(userID int64, encodedMessage string) (string, error) {
 	parts := strings.SplitN(encodedMessage, ":", 4)
 	if len(parts) != 4 || parts[0] != envelopePrefix || parts[1] != envelopeVersion {
