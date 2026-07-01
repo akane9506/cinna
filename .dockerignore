@@ -34,3 +34,6 @@ coverage/
 *.test
 coverage.*
 **/*_test.go
+
+# Generated inside the builder stage
+internal/postgres/sqlc/

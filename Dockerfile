@@ -6,9 +6,12 @@ WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 
+RUN go install github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1
+
 COPY . .
 
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+RUN sqlc generate && \
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
     go build \
     -trimpath \
     -ldflags="-s -w" \
