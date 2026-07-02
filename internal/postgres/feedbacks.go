@@ -34,9 +34,9 @@ func NewFeedbacksRepository(
 }
 
 // retrieves pending feedbacks from the database
-func (f *FeedbacksRepository) ListPendingFeedbacks(
-	ctx context.Context) ([]sqlc.ListPendingFeedbacksRow, error) {
-	return f.queries.ListPendingFeedbacks(ctx)
+func (f *FeedbacksRepository) ListIncompleteFeedbacks(
+	ctx context.Context) ([]sqlc.ListIncompleteFeedbacksRow, error) {
+	return f.queries.ListIncompleteFeedbacks(ctx)
 }
 
 // add feedback items to the database

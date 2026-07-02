@@ -71,11 +71,13 @@ func main() {
 	queries := sqlc.New(pool)
 	allowlistRepo := db.NewAllowListRepository(queries)
 	shoppingListRepo := db.NewShoppingListRepository(queries)
-	agentMemory := db.NewAgentMemoryRepository(queries, messageCipher, logger)
+	agentMemoryRepo := db.NewAgentMemoryRepository(queries, messageCipher, logger)
+	feedbackRepo := db.NewFeedbacksRepository(queries)
 	repos := &ports.Repositories{
 		AllowList:    allowlistRepo,
 		ShoppingList: shoppingListRepo,
-		AgentMemory:  agentMemory,
+		AgentMemory:  agentMemoryRepo,
+		Feedback:     feedbackRepo,
 	}
 
 	// create an agent

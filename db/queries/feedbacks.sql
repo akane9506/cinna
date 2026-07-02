@@ -1,4 +1,4 @@
--- name: ListPendingFeedbacks :many
+-- name: ListIncompleteFeedbacks :many
 SELECT
     id,
     content,
