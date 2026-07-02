@@ -35,6 +35,9 @@ ON CONFLICT (
     lower(btrim(content))
 )
 DO UPDATE SET
-    status = 'pending',
+    status = CASE
+        WHEN feedbacks.status = 'completed' THEN 'pending'
+        ELSE feedbacks.status
+    END,
     updated_at = NOW()
 RETURNING *;
