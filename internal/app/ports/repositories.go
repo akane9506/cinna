@@ -56,3 +56,14 @@ type AgentMemoryRepository interface {
 		keepCount int32,
 	) error
 }
+
+type FeedbacksRepository interface {
+	CreateFeedbackItems(
+		ctx context.Context,
+		telegramUserID int64,
+		contents []string,
+	) ([]sqlc.Feedback, error)
+
+	ListPendingFeedbacks(
+		ctx context.Context) ([]sqlc.ListPendingFeedbacksRow, error)
+}

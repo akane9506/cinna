@@ -76,4 +76,27 @@ CREATE TABLE IF NOT EXISTS agent_memory(
 );
 
 CREATE INDEX IF NOT EXISTS agent_memory_user_id_idx
-    ON agent_memory (telegram_user_id, id DESC)
+    ON agent_memory (telegram_user_id, id DESC);
+
+-- Table for user feedback
+CREATE TABLE IF NOT EXISTS feedbacks(
+    id BIGSERIAL PRIMARY KEY,
+
+    telegram_user_id BIGINT NOT NULL
+        REFERENCES allowed_users(telegram_user_id)
+        ON DELETE CASCADE,
+
+    content TEXT NOT NULL
+        CHECK (length(btrim(content)) > 0),
+
+    status TEXT NOT NULL DEFAULT 'pending'
+        CHECK (status IN ('pending', 'in_progress', 'completed')),
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS feedbacks_status_updated_at_idx
+    ON feedbacks (status, updated_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS feedbacks_user_content_idx
+    ON feedbacks (telegram_user_id, lower(btrim(content)));

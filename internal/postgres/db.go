@@ -43,6 +43,12 @@ func CheckSchema(ctx context.Context, pool *pgxpool.Pool) error {
 			FROM information_schema.tables
 			WHERE table_schema = 'public'
 				AND table_name = 'agent_memory'
+		)
+		AND EXISTS (
+			SELECT 1
+			FROM information_schema.tables
+			WHERE table_schema = 'public'
+				AND table_name = 'feedbacks'
 		);
 	`
 	var ok bool
