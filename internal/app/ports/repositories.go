@@ -10,6 +10,7 @@ type Repositories struct {
 	AllowList    AllowListRepository
 	ShoppingList ShoppingListRepository
 	AgentMemory  AgentMemoryRepository
+	Feedback     FeedbacksRepository
 }
 
 type AllowListRepository interface {
@@ -64,6 +65,6 @@ type FeedbacksRepository interface {
 		contents []string,
 	) ([]sqlc.Feedback, error)
 
-	ListPendingFeedbacks(
-		ctx context.Context) ([]sqlc.ListPendingFeedbacksRow, error)
+	ListIncompleteFeedbacks(
+		ctx context.Context) ([]sqlc.ListIncompleteFeedbacksRow, error)
 }
