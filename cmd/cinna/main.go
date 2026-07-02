@@ -42,7 +42,13 @@ func main() {
 		logger.Error("failed to connect to PostgreSQL server", "error", err)
 		os.Exit(1)
 	}
-	defer pool.Close()
+
+	defer func() {
+		logger.Info("closing PostgreSQL pool")
+		pool.Close()
+		logger.Info("PostgreSQL pool closed")
+	}()
+
 	// check schemas and tables
 	if err := db.CheckSchema(ctx, pool); err != nil {
 		logger.Error("database schema check failed", "error", err)
