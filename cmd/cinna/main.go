@@ -17,10 +17,13 @@ import (
 	db "github.com/akane9506/cinna/internal/postgres"
 	"github.com/akane9506/cinna/internal/postgres/sqlc"
 	"github.com/akane9506/cinna/internal/security"
+	"github.com/akane9506/cinna/internal/utils"
 )
 
 func main() {
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		ReplaceAttr: utils.LoggerReplaceLevelWithSeverity,
+	}))
 	// load environment variables
 	config, err := app.LoadConfig()
 	if err != nil {
