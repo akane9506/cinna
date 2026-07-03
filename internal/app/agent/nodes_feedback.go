@@ -11,6 +11,7 @@ import (
 
 const (
 	listFeedbackItemsLambdaNodeName = "list_feedback_items"
+	feedbacksUpdatePlannerNodeName  = "plan_feedback_updates"
 )
 
 // ========== List Feedback Items Lambda ==========
@@ -63,4 +64,26 @@ func (a *CinnaReactAgent) listFeedbackItems(
 		Role:    schema.Assistant,
 		Content: message,
 	}
+}
+
+// ========= Feedbacks Planner ==========
+// Plan the task based the current feedbacks from the database and the user's message
+// in: []*schema.Message | out: *schema.Message
+func (a *CinnaReactAgent) AddFeedbacksPlanningNode() {
+	a.graph.AddChatModelNode(
+		feedbacksUpdatePlannerNodeName,
+		a.jsonModel,
+		compose.WithStatePreHandler(a.prepareForFeedbacksPlanning),
+	)
+}
+
+func (a *CinnaReactAgent) prepareForFeedbacksPlanning(
+	ctx context.Context,
+	input []*schema.Message,
+	state *CinnaAgentState,
+) ([]*schema.Message, error) {
+	state.SystemMessage = a.prompts.FeedbacksPlanner
+	msgs := organizeInputMessage(input, state.SystemMessage)
+	state.History = msgs
+	return msgs, nil
 }
