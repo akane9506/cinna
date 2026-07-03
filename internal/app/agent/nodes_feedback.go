@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -10,8 +11,9 @@ import (
 )
 
 const (
-	listFeedbackItemsLambdaNodeName = "list_feedback_items"
-	feedbacksUpdatePlannerNodeName  = "plan_feedback_updates"
+	listFeedbackItemsLambdaNodeName   = "list_feedback_items"
+	feedbacksUpdatePlannerNodeName    = "plan_feedback_updates"
+	updateFeedbackItemsLambdaNodeName = "update_feedback_items"
 )
 
 // ========== List Feedback Items Lambda ==========
@@ -86,4 +88,65 @@ func (a *CinnaReactAgent) prepareForFeedbacksPlanning(
 	msgs := organizeInputMessage(input, state.SystemMessage)
 	state.History = msgs
 	return msgs, nil
+}
+
+// ========= Update Feedback Items Lambda ==========
+
+type FeedbackItems struct {
+	Items []string `json:"items"`
+}
+
+func (a *CinnaReactAgent) executeUpdateFeedbacks(
+	ctx context.Context, msg *schema.Message) ([]*schema.Message, error) {
+	logger := a.logger.With("Node", updateFeedbackItemsLambdaNodeName)
+	newFeedbacks := a.parseFeedbackItems(ctx, msg.Content)
+	var telegramUserID int64
+	var msgs []*schema.Message
+	compose.ProcessState[*CinnaAgentState](ctx,
+		func(ctx context.Context, state *CinnaAgentState) error {
+			telegramUserID = state.TelegramUserID
+			msgs = state.History
+			return nil
+		})
+	if len(newFeedbacks.Items) > 0 {
+		result, err := a.repos.Feedback.CreateFeedbackItems(
+			ctx, telegramUserID, newFeedbacks.Items)
+		if err != nil {
+			logger.Error("failed to update the feedbacks to db", "error", err)
+			msgs = append(msgs, &schema.Message{
+				Role:    schema.Assistant,
+				Content: "failed to add the feedbacks, please let user know and make apology",
+			})
+			return msgs, nil
+		}
+		addedFeedbacks := []string{}
+		for _, feedback := range result {
+			addedFeedbacks = append(addedFeedbacks, feedback.Content)
+		}
+		if len(addedFeedbacks) > 0 {
+			msgs = append(msgs, &schema.Message{
+				Role: schema.Assistant,
+				Content: fmt.Sprintf(
+					"added the following feedbacks to the database: [%s].",
+					strings.Join(addedFeedbacks, ", ")),
+			})
+			// add additional instruction to avoid unveiling details of the feedbacks to the user
+			msgs = append(msgs, &schema.Message{
+				Role:    schema.Assistant,
+				Content: "let user know the added feedbacks but don't unveil the conversation summary and possible reasons",
+			})
+		}
+	}
+	return msgs, nil
+}
+
+func (a *CinnaReactAgent) parseFeedbackItems(
+	ctx context.Context, rawMessage string) *FeedbackItems {
+	logger := a.logger.With("Node", updateFeedbackItemsLambdaNodeName)
+	var feedbackItems FeedbackItems
+	if err := json.Unmarshal([]byte(rawMessage), &feedbackItems); err != nil {
+		logger.Error("Invalid feedback tasks json", "error", err)
+		return &FeedbackItems{Items: []string{}} // return empty object
+	}
+	return &feedbackItems
 }
