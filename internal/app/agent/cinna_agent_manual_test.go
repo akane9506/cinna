@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/akane9506/cinna/internal/app"
@@ -72,7 +73,7 @@ func TestCinnaChat(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	runnable, err := agent.buildCinnaChatGraph(ctx)
+	runnable, err := buildCinnaChatGraph(ctx, *agent)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -99,7 +100,7 @@ func TestIntentLambda(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	runnable, err := agent.buildIntentLambdaOutputNode(ctx, t)
+	runnable, err := buildIntentLambdaOutputNode(ctx, agent, t)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,13 +135,13 @@ func TestIntentLambda(t *testing.T) {
 	_, err = runnable.Invoke(ctx, input)
 }
 
-func TestTaskPlanningNode(t *testing.T) {
+func TestShoppingTaskPlanningNode(t *testing.T) {
 	ctx := context.Background()
 	agent, err := setupAgent(t, ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	runner, err := agent.buildShoppingTaskPlanerGraph(ctx)
+	runner, err := buildShoppingTaskPlanerGraph(ctx, agent)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -189,56 +190,105 @@ func TestTaskPlanningNode(t *testing.T) {
 	t.Log(result.Content)
 }
 
+func TestFeedbackPlannerNode(t *testing.T) {
+	ctx := context.Background()
+	agent, err := setupAgent(t, ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runnable, err := buildFeedbacksPlannerNode(ctx, agent, t)
+	if err != nil {
+		t.Fatal(err)
+	}
+	input := &TaskInput{telegramUserID: mockTelegramUserID}
+	// ========== Test Single Feedback ==========
+	t.Log("\n" + strings.Repeat("=", 20) + "Test Single Feedback" + strings.Repeat("=", 20))
+	input.chatHistory = []*schema.Message{
+		{Role: schema.User, Content: "Cinna反应的速度有点慢呀"},
+	}
+	result, err := runnable.Invoke(ctx, input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Log(result.Content)
+
+	// ========== Test Single Feedback With Conversation ==========
+	t.Log("\n" + strings.Repeat("=", 20) + "Test Single Feedback With Conversation" + strings.Repeat("=", 20))
+	input.chatHistory = []*schema.Message{
+		{Role: schema.User, Content: "Cinna我想吃巧克力"},
+		{Role: schema.User, Content: "好的已经把巧克力加进小本本啦"},
+		{Role: schema.User, Content: "不对你应该和我确认一下我要那种巧克力！"},
+	}
+	result, err = runnable.Invoke(ctx, input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Log(result.Content)
+
+	// ========== Test Multiple Feedbacks With Conversation ==========
+	t.Log("\n" + strings.Repeat("=", 20) + "Test Single Feedback With Conversation" + strings.Repeat("=", 20))
+	input.chatHistory = []*schema.Message{
+		{Role: schema.User, Content: "Cinna我想吃雪糕"},
+		{Role: schema.User, Content: "好的已经把雪糕加进小本本啦"},
+		{Role: schema.User, Content: "不对你应该和我确认一下我要哪种雪糕，还有你的表情太多啦！"},
+	}
+	result, err = runnable.Invoke(ctx, input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Log(result.Content)
+}
+
 // ========== Graph-Building For Manual Tests [DO NOT USE IN PRODUCTION] ==========
-func (a *CinnaReactAgent) buildCinnaChatGraph(
-	ctx context.Context) (compose.Runnable[*TaskInput, *schema.Message], error) {
-	if a.runner != nil {
+func buildCinnaChatGraph(
+	ctx context.Context, agent CinnaReactAgent) (compose.Runnable[*TaskInput, *schema.Message], error) {
+	if agent.runner != nil {
 		return nil, fmt.Errorf("this is only for manual test, do not use it in production")
 	}
-	graph := a.graph
-	a.AddProcessInputLambdaNode()
-	a.AddCinnaResponseNode()
+	graph := agent.graph
+	agent.AddProcessInputLambdaNode()
+	agent.AddCinnaResponseNode()
 	graph.AddEdge(compose.START, processInputLambdaNodeName)
 	graph.AddEdge(processInputLambdaNodeName, cinnaChatNodeName)
 	graph.AddEdge(cinnaChatNodeName, compose.END)
 	runnable, err := graph.Compile(ctx)
 	if err != nil {
-		a.logger.Error("failed to compile manual cinna chat graph", "error", err)
+		agent.logger.Error("failed to compile manual cinna chat graph", "error", err)
 		return nil, err
 	}
 	return runnable, nil
 }
 
-func (a *CinnaReactAgent) buildShoppingTaskPlanerGraph(
-	ctx context.Context) (compose.Runnable[*TaskInput, *schema.Message], error) {
-	if a.runner != nil {
+func buildShoppingTaskPlanerGraph(
+	ctx context.Context, agent *CinnaReactAgent) (compose.Runnable[*TaskInput, *schema.Message], error) {
+	if agent.runner != nil {
 		return nil, fmt.Errorf("this is only for manual test, do not use it in production")
 	}
-	graph := a.graph
-	a.AddProcessInputLambdaNode()
-	a.AddShoppingTaskPlanningNode()
+	graph := agent.graph
+	agent.AddProcessInputLambdaNode()
+	agent.AddShoppingTaskPlanningNode()
 	graph.AddEdge(compose.START, processInputLambdaNodeName)
 	graph.AddEdge(processInputLambdaNodeName, shoppingTasksPlannerLLMNodeName)
 	graph.AddEdge(shoppingTasksPlannerLLMNodeName, compose.END)
 	runnable, err := graph.Compile(ctx)
 	if err != nil {
-		a.logger.Error("failed to compile manual cinna chat graph", "error", err)
+		agent.logger.Error("failed to compile manual cinna chat graph", "error", err)
 		return nil, err
 	}
 	return runnable, nil
 }
 
-func (a *CinnaReactAgent) buildIntentLambdaOutputNode(
-	ctx context.Context, t *testing.T) (compose.Runnable[*TaskInput, *schema.Message], error) {
-	if a.runner != nil {
+func buildIntentLambdaOutputNode(
+	ctx context.Context, agent *CinnaReactAgent, t *testing.T) (compose.Runnable[*TaskInput, *schema.Message], error) {
+	if agent.runner != nil {
 		return nil, fmt.Errorf("this is only for manual test, do not use it in production")
 	}
 	// add a test-purposed node to make the test graph type compatible with the
 	// agent's I/O type
-	graph := a.graph
-	a.AddProcessInputLambdaNode()
-	a.AddIntentClassificationNode()
-	a.AddIntentOutputLambdaNode()
+	graph := agent.graph
+	agent.AddProcessInputLambdaNode()
+	agent.AddIntentClassificationNode()
+	agent.AddIntentOutputLambdaNode()
 	graph.AddLambdaNode("mock_final_output",
 		compose.InvokableLambda[[]*schema.Message, *schema.Message](func(
 			ctx context.Context, input []*schema.Message) (*schema.Message, error) {
@@ -261,8 +311,29 @@ func (a *CinnaReactAgent) buildIntentLambdaOutputNode(
 	graph.AddEdge("mock_final_output", compose.END)
 	runnable, err := graph.Compile(ctx)
 	if err != nil {
-		a.logger.Error("failed to compile manual intent lambda graph", "error", err)
+		t.Error("failed to compile manual intent lambda graph", "error", err)
 		return nil, err
+	}
+	return runnable, nil
+}
+
+func buildFeedbacksPlannerNode(
+	ctx context.Context,
+	agent *CinnaReactAgent,
+	t *testing.T) (compose.Runnable[*TaskInput, *schema.Message], error) {
+	if agent.runner != nil {
+		return nil, fmt.Errorf("this is only for manual test, do not use it in production")
+	}
+	agent.AddProcessInputLambdaNode()
+	agent.AddFeedbacksPlanningNode()
+
+	graph := agent.graph
+	graph.AddEdge(compose.START, processInputLambdaNodeName)
+	graph.AddEdge(processInputLambdaNodeName, feedbacksUpdatePlannerNodeName)
+	graph.AddEdge(feedbacksUpdatePlannerNodeName, compose.END)
+	runnable, err := graph.Compile(ctx)
+	if err != nil {
+		t.Error("failed to compile manual feedback planner graph", "error", err)
 	}
 	return runnable, nil
 }
