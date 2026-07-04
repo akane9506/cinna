@@ -14,7 +14,11 @@ type Repositories struct {
 }
 
 type AllowListRepository interface {
+	IsAdminUser(ctx context.Context, telegramUserID int64) (bool, error)
 	IsAllowedUser(ctx context.Context, telegramUserID int64) (bool, error)
+	UpsertAllowedUser(
+		ctx context.Context,
+		telegramUserID int64) (sqlc.AllowedUser, error)
 }
 
 type ShoppingListRepository interface {

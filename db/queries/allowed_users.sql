@@ -1,8 +1,17 @@
+-- name: IsAdminUser :one
+SELECT EXISTS (
+    SELECT 1
+    FROM allowed_users
+    WHERE telegram_user_id = sqlc.arg(telegram_user_id)
+        AND role = 'admin'
+        AND is_active = TRUE
+);
+
 -- name: IsAllowedUser :one
 SELECT EXISTS (
     SELECT 1
     FROM allowed_users
-    WHERE telegram_user_id = $1
+    WHERE telegram_user_id = sqlc.arg(telegram_user_id)
         AND is_active = TRUE
 );
 
@@ -14,10 +23,7 @@ INSERT INTO allowed_users (
     sqlc.arg(telegram_user_id),
     sqlc.arg(role)
 )
-ON CONFLICT (telegram_user_id) DO UPDATE SET
-    role = EXCLUDED.role,
-    is_active = TRUE,
-    updated_at = NOW()
+ON CONFLICT (telegram_user_id) DO NOTHING
 RETURNING *;
 
 -- name: ListAllowedUsers :many

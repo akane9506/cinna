@@ -4,11 +4,9 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
-	"time"
 
 	"github.com/akane9506/cinna/internal/app/ports"
 	"github.com/go-telegram/bot"
-	"github.com/go-telegram/bot/models"
 )
 
 type AgentHandler interface {
@@ -92,70 +90,4 @@ func (c *Client) RunPolling(ctx context.Context) {
 
 func (c *Client) WebhookHandler() http.Handler {
 	return c.bot.WebhookHandler()
-}
-
-// ========== Handlers ==========
-func (c *Client) handleUpdate(ctx context.Context, b *bot.Bot, update *models.Update) {
-	logger := c.logger.With("path", "internal/telegram/bot/handleUpdate")
-	if update.Message == nil || update.Message.Text == "" {
-		return
-	}
-	typingDone := setTypingAction(ctx, b, update)
-	reply, err := c.agentHandler.HandleText(
-		ctx,
-		update.Message.From.ID,
-		update.Message.Text)
-	if err != nil {
-		logger.Error(
-			"failed to get reply from agent",
-			"user_id", update.Message.From.ID,
-			"error", err,
-		)
-		b.SendMessage(ctx, &bot.SendMessageParams{
-			ChatID: update.Message.Chat.ID,
-			Text:   "inter server error",
-		})
-		close(typingDone)
-		return
-	}
-	_, err = b.SendMessage(ctx, &bot.SendMessageParams{
-		ChatID: update.Message.Chat.ID,
-		Text:   reply,
-	})
-	if err != nil {
-		logger.Error(
-			"failed to send telegram response",
-			"chat_id", update.Message.Chat.ID,
-			"error", err,
-		)
-	}
-	close(typingDone)
-}
-
-// ========== helper functions =========
-func setTypingAction(ctx context.Context, b *bot.Bot, update *models.Update) chan struct{} {
-	typingDone := make(chan struct{})
-	go func() {
-		ticker := time.NewTicker(4 * time.Second)
-		defer ticker.Stop()
-
-		sendTyping := func() {
-			b.SendChatAction(ctx, &bot.SendChatActionParams{
-				ChatID: update.Message.Chat.ID,
-				Action: models.ChatActionTyping,
-			})
-		}
-		sendTyping()
-		for {
-			select {
-			case <-typingDone:
-				return
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				sendTyping()
-			}
-		}
-	}()
-	return typingDone
 }
