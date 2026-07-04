@@ -29,9 +29,12 @@ func (a *CinnaReactAgent) processFeedbackListLambda(
 	ctx context.Context, msgs []*schema.Message) ([]*schema.Message, error) {
 	compose.ProcessState[*CinnaAgentState](ctx,
 		func(ctx context.Context, state *CinnaAgentState) error {
-			feedbackItemsMessage := a.listFeedbackItems(ctx, state)
-			msgs = append(msgs, feedbackItemsMessage)
-			state.History = append(state.History, feedbackItemsMessage)
+			// we only add DB feedback items to messages when the action is "UPDATE"
+			// other wise feedback will be inspected from the user's chat history
+			if state.ActionType == ActionUpdate {
+				feedbackItemsMessage := a.listFeedbackItems(ctx, state)
+				msgs = append(msgs, feedbackItemsMessage)
+			}
 			return nil
 		},
 	)
@@ -43,6 +46,7 @@ func (a *CinnaReactAgent) listFeedbackItems(
 	logger := a.logger.With("Node", listFeedbackItemsLambdaNodeName)
 	telegramUserID := state.TelegramUserID
 	// query database
+	// *IMPORTANT* never add this list to the chat history
 	currList, err := a.repos.Feedback.ListIncompleteFeedbacks(ctx)
 	if err != nil {
 		logger.Error(
@@ -66,6 +70,29 @@ func (a *CinnaReactAgent) listFeedbackItems(
 		Role:    schema.Assistant,
 		Content: message,
 	}
+}
+
+// ========== Feedback Action Branch ==========
+func (a *CinnaReactAgent) AddFeedbacksActionBranch() {
+	endNodes := map[string]bool{}
+	endNodes[feedbacksUpdatePlannerNodeName] = true
+	endNodes[cinnaChatNodeName] = true
+	a.graph.AddBranch(listFeedbackItemsLambdaNodeName,
+		compose.NewGraphBranch(a.feedbacksActionBranch, endNodes))
+}
+
+func (a *CinnaReactAgent) feedbacksActionBranch(ctx context.Context, out []*schema.Message) (string, error) {
+	var next string
+	compose.ProcessState[*CinnaAgentState](ctx, func(ctx context.Context, state *CinnaAgentState) error {
+		switch state.ActionType {
+		case ActionUpdate:
+			next = feedbacksUpdatePlannerNodeName
+		default:
+			next = cinnaChatNodeName
+		}
+		return nil
+	})
+	return next, nil
 }
 
 // ========= Feedbacks Planner ==========
@@ -94,6 +121,13 @@ func (a *CinnaReactAgent) prepareForFeedbacksPlanning(
 
 type FeedbackItems struct {
 	Items []string `json:"items"`
+}
+
+func (a *CinnaReactAgent) AddUpdateFeedbacksLambdaNode() {
+	a.graph.AddLambdaNode(
+		updateFeedbackItemsLambdaNodeName,
+		compose.InvokableLambda[*schema.Message, []*schema.Message](a.executeUpdateFeedbacks),
+	)
 }
 
 func (a *CinnaReactAgent) executeUpdateFeedbacks(

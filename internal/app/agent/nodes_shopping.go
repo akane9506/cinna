@@ -110,7 +110,7 @@ func (a *CinnaReactAgent) shoppingActionBranch(ctx context.Context, out []*schem
 		ctx, func(ctx context.Context, state *CinnaAgentState) error {
 			switch state.ActionType {
 			case ActionUpdate:
-				next = shoppingTasksPlannerLLMNodeName // we just put this as a place holder
+				next = shoppingTasksPlannerLLMNodeName
 			case ActionList:
 				next = cinnaChatNodeName
 			default:
