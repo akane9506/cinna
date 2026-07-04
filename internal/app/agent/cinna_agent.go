@@ -97,6 +97,10 @@ func (a *CinnaReactAgent) BuildGraph(
 	a.AddListShoppingItemsLambda()
 	a.AddShoppingTaskPlanningNode()
 	a.AddRunShoppingTaskLambdaNode()
+	// feedbacks branch
+	a.AddListFeedbackItemsLambda()
+	a.AddFeedbacksPlanningNode()
+	a.AddUpdateFeedbacksLambdaNode()
 	// Cinna response
 	a.AddCinnaResponseNode()
 
@@ -109,6 +113,11 @@ func (a *CinnaReactAgent) BuildGraph(
 	a.AddShoppingActionBranch()
 	graph.AddEdge(shoppingTasksPlannerLLMNodeName, shoppingTaskRunLambdaNodeName)
 	graph.AddEdge(shoppingTaskRunLambdaNodeName, cinnaChatNodeName)
+	// feedbacks branch
+	a.AddFeedbacksActionBranch()
+	graph.AddEdge(feedbacksUpdatePlannerNodeName, updateFeedbackItemsLambdaNodeName)
+	graph.AddEdge(updateFeedbackItemsLambdaNodeName, cinnaChatNodeName)
+	// final step
 	graph.AddEdge(cinnaChatNodeName, compose.END)
 	runnable, err := graph.Compile(ctx)
 	if err != nil {

@@ -116,6 +116,7 @@ func (a *CinnaReactAgent) processIntentOutput(
 func (a *CinnaReactAgent) AddIntentBranch() {
 	endNodes := map[string]bool{}
 	endNodes[listShoppingItemsLambdaNodeName] = true
+	endNodes[listFeedbackItemsLambdaNodeName] = true
 	endNodes[cinnaChatNodeName] = true
 	a.graph.AddBranch(intentLambdaNodeName, compose.NewGraphBranch(a.intentBranch, endNodes))
 }
@@ -126,9 +127,9 @@ func (a *CinnaReactAgent) intentBranch(ctx context.Context, out []*schema.Messag
 		ctx, func(ctx context.Context, state *CinnaAgentState) error {
 			switch state.ChatIntent {
 			case IntentShopping:
-				next = listShoppingItemsLambdaNodeName // we just put this as a place holder
-			case IntentOther:
-				next = cinnaChatNodeName
+				next = listShoppingItemsLambdaNodeName
+			case IntentFeedback:
+				next = listFeedbackItemsLambdaNodeName
 			default:
 				next = cinnaChatNodeName
 			}
