@@ -34,7 +34,6 @@ func (a *CinnaReactAgent) processFeedbackListLambda(
 			if state.ActionType == ActionUpdate {
 				feedbackItemsMessage := a.listFeedbackItems(ctx, state)
 				msgs = append(msgs, feedbackItemsMessage)
-				state.History = append(state.History, feedbackItemsMessage)
 			}
 			return nil
 		},
