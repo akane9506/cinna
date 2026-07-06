@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="./assets/cinna-small.jpg" width="120px" style="border-radius: 50%;" />
+
 # Cinna
 
 ![CI](https://github.com/akane9506/cinna/actions/workflows/ci.yml/badge.svg)
