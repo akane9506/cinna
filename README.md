@@ -1,4 +1,8 @@
-# Cinna
+<h1 align="center"> Cinna </h1>
+<p align="center">
+    [![CI](https://github.com/akane9506/cinna/actions/workflows/ci.yml/badge.svg)](https://github.com/akane9506/cinna/actions/workflows/ci.yml)
+    [![Deploy](https://github.com/akane9506/cinna/actions/workflows/deployment.yml/badge.svg)](https://github.com/akane9506/cinna/actions/workflows/deployment.yml)
+</p>
 
 Cinna is a Telegram assistant written in Go. It uses PostgreSQL for access
 control and per-user shopping lists, an Eino graph to route and execute tasks,
