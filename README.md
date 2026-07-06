@@ -1,18 +1,17 @@
-# Cinna
+<div align="center">
 
-Cinna is a Telegram assistant written in Go. It uses PostgreSQL for access
-control and per-user shopping lists, an Eino graph to route and execute tasks,
-DeepSeek for classification, planning, and replies, and encrypted PostgreSQL-
-backed chat history with a short in-memory working window per Telegram user.
+<svg width="180" height="180" style="border-radius: 50%;">
+    <img src="./assets/cinna-small.jpg" width="180px" height="180px"/>
+</svg>
 
-Current capabilities include:
+<h1>Cinna</h1>
 
-- Telegram long polling in development and webhooks in production
-- PostgreSQL-backed Telegram user allow-listing
-- Shopping-list listing, addition, removal, and modification
-- Batched shopping-list updates with category assignment
-- Feedback collection with pending and in-progress feedback context
-- General chat with the embedded Cinna persona
+![CI](https://github.com/akane9506/cinna/actions/workflows/ci.yml/badge.svg)
+![Deploy](https://github.com/akane9506/cinna/actions/workflows/deployment.yml/badge.svg)
+
+</div>
+
+Cinna is a customizable Telegram ReAct agent bot built with Go and Eino. It supports configurable sub-agents and modules for a variety of use cases, uses database-backed memory to manage daily tasks while retaining long-term context across conversations, and protects historical messages with encryption for improved privacy and security.
 
 ## Agent Graph
 
@@ -51,6 +50,14 @@ flowchart LR
 
     CinnaReply --> End([END])
 ```
+
+Current capabilities include:
+
+- Telegram long polling in development and webhooks in production
+- Specialized **sub-models** that improve task accuracy while reducing token usage
+- PostgreSQL-backed data management
+- Feedback collection with pending and in-progress feedback context
+- General chat with the embedded Configurable persona
 
 ## Requirements
 
