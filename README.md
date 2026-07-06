@@ -2,8 +2,8 @@
 
 Cinna is a Telegram assistant written in Go. It uses PostgreSQL for access
 control and per-user shopping lists, an Eino graph to route and execute tasks,
-DeepSeek for classification, planning, and replies, and short-term in-memory
-chat history per Telegram user.
+DeepSeek for classification, planning, and replies, and encrypted PostgreSQL-
+backed chat history with a short in-memory working window per Telegram user.
 
 Current capabilities include:
 
@@ -11,6 +11,7 @@ Current capabilities include:
 - PostgreSQL-backed Telegram user allow-listing
 - Shopping-list listing, addition, removal, and modification
 - Batched shopping-list updates with category assignment
+- Feedback collection with pending and in-progress feedback context
 - General chat with the embedded Cinna persona
 
 ## Agent Graph
@@ -25,17 +26,28 @@ flowchart LR
 
     IntentLambda --> IntentRouter{"Branch by Intent<br/><br/>SHOPPING | FEEDBACK | OTHER"}
 
-    IntentRouter -- SHOPPING --> ListLambda["Load Shopping List<br/><br/>Loads the user's active and expired items<br/>with IDs and categories<br/><br/>In: schema.Message[]<br/>Out: schema.Message[]"]
+    IntentRouter -- SHOPPING --> ListLambda["List Shopping Items Lambda<br/><br/>Loads the user's active and expired items<br/>with IDs and categories<br/><br/>In: schema.Message[]<br/>Out: schema.Message[]"]
 
     ListLambda --> ActionRouter{"Branch by Action<br/><br/>LIST | UPDATE | NONE"}
 
-    ActionRouter -- UPDATE --> ShoppingPlanner["Shopping Planner<br/><br/>Plans batched ADD, REMOVE, and MODIFY<br/>commands from chat history and current items<br/><br/>In: schema.Message[]<br/>Out: schema.Message"]
+    ActionRouter -- UPDATE --> ShoppingPlanner["Shopping Planner<br/><br/>Plans batched ADD, REMOVE, and MODIFY commands<br/>from chat history and current items; its raw output<br/>is not retained in conversation history<br/><br/>In: schema.Message[]<br/>Out: schema.Message"]
 
-    ShoppingPlanner --> ShoppingExecutor["Execute Shopping Commands<br/><br/>Validates commands and updates PostgreSQL<br/><br/>In: schema.Message<br/>Out: schema.Message[]"]
+    ShoppingPlanner --> ShoppingExecutor["Update Shopping List Lambda<br/><br/>Parses and validates commands, then updates PostgreSQL<br/><br/>In: schema.Message<br/>Out: schema.Message[]"]
 
     ShoppingExecutor --> CinnaReply["Cinna Reply"]
     ActionRouter -- LIST/NONE --> CinnaReply
-    IntentRouter -- FEEDBACK/OTHER --> CinnaReply
+
+    IntentRouter -- FEEDBACK --> FeedbackListLambda["List Feedback Items Lambda<br/><br/>Loads pending and in-progress feedback for the planner<br/>when the action is UPDATE<br/><br/>In: schema.Message[]<br/>Out: schema.Message[]"]
+
+    FeedbackListLambda --> FeedbackActionRouter{"Branch by Action<br/><br/>UPDATE | LIST | NONE"}
+
+    FeedbackActionRouter -- UPDATE --> FeedbackPlanner["Feedback Planner<br/><br/>Determines feedback items to add or reopen;<br/>its raw output is not retained in conversation history<br/><br/>In: schema.Message[]<br/>Out: schema.Message"]
+
+    FeedbackPlanner --> FeedbackExecutor["Update Feedback Items Lambda<br/><br/>Parses planner output and writes feedback to PostgreSQL<br/><br/>In: schema.Message<br/>Out: schema.Message[]"]
+
+    FeedbackExecutor --> CinnaReply
+    FeedbackActionRouter -- LIST/NONE --> CinnaReply
+    IntentRouter -- OTHER --> CinnaReply
 
     CinnaReply --> End([END])
 ```
@@ -125,6 +137,8 @@ docker compose exec postgres \
   psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
   -c "\d allowed_users" \
   -c "\d shopping_list" \
+  -c "\d agent_memory" \
+  -c "\d feedbacks" \
   -c "\dT+ shopping_category"
 ```
 
@@ -250,16 +264,18 @@ The main request path is:
 Telegram message
   -> allow-list middleware
   -> intent and action classification
-  -> shopping-list lookup (shopping requests only)
-  -> shopping command planning and PostgreSQL updates (updates only)
+  -> shopping-list or feedback lookup (matching requests only)
+  -> shopping or feedback planning and PostgreSQL updates (updates only)
   -> Cinna response generation
   -> Telegram response
 ```
 
 The prompts under `internal/app/agent/prompt/` are embedded into the binary.
-The agent stores user and final assistant messages in an in-memory, per-user
-history and sends typing actions while it waits for a response. This history
-is reset when the process restarts; shopping-list data remains in PostgreSQL.
+The agent keeps the 30 most recent messages in an in-memory, per-user working
+history and periodically flushes buffered user and final assistant messages to
+PostgreSQL. Stored message content is encrypted with `MESSAGE_ENCRYPTION_KEY`;
+the database retains up to 100 messages per user, allowing recent history to be
+restored after a process restart.
 
 ## SQL Commands
 
@@ -312,7 +328,7 @@ Run the manual agent graph checks:
 
 ```bash
 RUN_MANUAL_TEST=1 go test ./internal/app/agent \
-  -run 'Test(CinnaChat|IntentLambda|TaskPlanningNode)$' -v
+  -run 'Test(CinnaChat|IntentLambda|ShoppingTaskPlanningNode|FeedbackPlannerNode)$' -v
 ```
 
 The model checks only require `DEEPSEEK_API_KEY`. The agent graph checks load
