@@ -19,7 +19,7 @@ const (
 	defaultMaxDBLength = 100
 
 	// flush buffer to the history db when buffer size equals or higher than this threshold
-	defaultFlushBufferThreshold = 6
+	defaultFlushBufferThreshold = 2 // we can increase this when having a constant-running instance
 )
 
 type MemoryStore struct {
@@ -63,9 +63,8 @@ func (m *MemoryStore) Append(ctx context.Context, userID int64, msg *schema.Mess
 	userState := m.getUserState(userID)
 	userState.mu.Lock()
 	defer userState.mu.Unlock()
-	// exclude reasoning and other token-consuming information
+	history := append(userState.history, *msg) // we should also include reasoning content in the history
 	cleanMessage := schema.Message{Role: msg.Role, Content: msg.Content}
-	history := append(userState.history, cleanMessage)
 	userState.buffer = append(userState.buffer, cleanMessage)
 	if len(history) > m.maxChatLength {
 		history = history[len(history)-m.maxChatLength:]
