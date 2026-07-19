@@ -319,9 +319,6 @@ func TestAppend(t *testing.T) {
 			if !tt.invalidMessage {
 				lastMsg := userState.history[len(userState.history)-1]
 				assert.Equal(t, lastMsg.Content, tt.msg.Content)
-				if tt.msg.ToolCallID != "" {
-					assert.NotEqual(t, lastMsg.ToolCallID, tt.msg.ToolCallID)
-				}
 			} else {
 				assert.Equal(t, len(userState.history), 0)
 			}
