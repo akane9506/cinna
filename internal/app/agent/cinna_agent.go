@@ -115,11 +115,12 @@ func (a *CinnaReactAgent) BuildGraph(
 	graph.AddEdge(shoppingTaskRunLambdaNodeName, cinnaChatNodeName)
 	// feedbacks branch
 	a.AddFeedbacksActionBranch()
-	graph.AddEdge(feedbacksUpdatePlannerNodeName, updateFeedbackItemsLambdaNodeName)
+	graph.AddEdge(feedbacksUpdatePlannerLLMNodeName, updateFeedbackItemsLambdaNodeName)
 	graph.AddEdge(updateFeedbackItemsLambdaNodeName, cinnaChatNodeName)
 	// final step
 	graph.AddEdge(cinnaChatNodeName, compose.END)
 	runnable, err := graph.Compile(ctx)
+
 	if err != nil {
 		a.logger.Error("failed to run manual cinna chat graph", "error", err)
 		return nil, err
