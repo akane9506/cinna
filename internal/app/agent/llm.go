@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/cloudwego/eino-ext/components/model/deepseek"
+	"github.com/cloudwego/eino/compose"
 )
 
 var (
@@ -83,4 +84,17 @@ func (m *Models) CreateDeepseekFlashJSONModel(ctx context.Context) (*deepseek.Ch
 		}
 	})
 	return deepseekFlashJSONModel, deepseekFlashJSONError
+}
+
+// KV Cache isolation
+func GetDeepseekIsolationOptions(nodeNames []string, telegramUserID int64) []compose.Option {
+	opts := []compose.Option{}
+	for _, name := range nodeNames {
+		isolationID := fmt.Sprintf("cinna:%d:node:%s", telegramUserID, name)
+		opt := compose.WithChatModelOption(deepseek.WithExtraFields(map[string]interface{}{
+			"user_id": isolationID,
+		})).DesignateNode(name)
+		opts = append(opts, opt)
+	}
+	return opts
 }

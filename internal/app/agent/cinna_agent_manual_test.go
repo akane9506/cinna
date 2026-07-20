@@ -329,8 +329,8 @@ func buildFeedbacksPlannerNode(
 
 	graph := agent.graph
 	graph.AddEdge(compose.START, processInputLambdaNodeName)
-	graph.AddEdge(processInputLambdaNodeName, feedbacksUpdatePlannerNodeName)
-	graph.AddEdge(feedbacksUpdatePlannerNodeName, compose.END)
+	graph.AddEdge(processInputLambdaNodeName, feedbacksUpdatePlannerLLMNodeName)
+	graph.AddEdge(feedbacksUpdatePlannerLLMNodeName, compose.END)
 	runnable, err := graph.Compile(ctx)
 	if err != nil {
 		t.Error("failed to compile manual feedback planner graph", "error", err)

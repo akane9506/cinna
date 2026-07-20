@@ -12,7 +12,7 @@ import (
 
 const (
 	listFeedbackItemsLambdaNodeName   = "list_feedback_items"
-	feedbacksUpdatePlannerNodeName    = "plan_feedback_updates"
+	feedbacksUpdatePlannerLLMNodeName = "plan_feedback_updates"
 	updateFeedbackItemsLambdaNodeName = "update_feedback_items"
 )
 
@@ -75,7 +75,7 @@ func (a *CinnaReactAgent) listFeedbackItems(
 // ========== Feedback Action Branch ==========
 func (a *CinnaReactAgent) AddFeedbacksActionBranch() {
 	endNodes := map[string]bool{}
-	endNodes[feedbacksUpdatePlannerNodeName] = true
+	endNodes[feedbacksUpdatePlannerLLMNodeName] = true
 	endNodes[cinnaChatNodeName] = true
 	a.graph.AddBranch(listFeedbackItemsLambdaNodeName,
 		compose.NewGraphBranch(a.feedbacksActionBranch, endNodes))
@@ -86,7 +86,7 @@ func (a *CinnaReactAgent) feedbacksActionBranch(ctx context.Context, out []*sche
 	compose.ProcessState[*CinnaAgentState](ctx, func(ctx context.Context, state *CinnaAgentState) error {
 		switch state.ActionType {
 		case ActionUpdate:
-			next = feedbacksUpdatePlannerNodeName
+			next = feedbacksUpdatePlannerLLMNodeName
 		default:
 			next = cinnaChatNodeName
 		}
@@ -100,7 +100,7 @@ func (a *CinnaReactAgent) feedbacksActionBranch(ctx context.Context, out []*sche
 // in: []*schema.Message | out: *schema.Message
 func (a *CinnaReactAgent) AddFeedbacksPlanningNode() {
 	a.graph.AddChatModelNode(
-		feedbacksUpdatePlannerNodeName,
+		feedbacksUpdatePlannerLLMNodeName,
 		a.jsonModel,
 		compose.WithStatePreHandler(a.prepareForFeedbacksPlanning),
 	)
