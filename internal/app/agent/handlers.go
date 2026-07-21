@@ -15,6 +15,10 @@ func (a *CinnaReactAgent) HandleText(
 		"path",
 		"internal/app/agent/cinna_graph/HandleText",
 	)
+	// lock user request to avoid concurrent message collapse history
+	unlockRequest := a.store.LockUserRequest(userID)
+	defer unlockRequest()
+
 	// concat in-memory message history and the most recent user message
 	userMessage := schema.UserMessage(text)
 	messages := a.store.Get(ctx, userID)

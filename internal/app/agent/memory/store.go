@@ -35,7 +35,9 @@ type MemoryStore struct {
 }
 
 type userState struct {
-	mu      sync.Mutex // protects user's buffer and history read/write
+	mu        sync.Mutex // protects user's buffer and history read/write
+	requestMu sync.Mutex // serializes the user's requests - avoid concurrent msgs ruin the history
+
 	history []schema.Message
 	buffer  []schema.Message
 	loaded  bool
@@ -108,6 +110,12 @@ func (m *MemoryStore) Get(ctx context.Context, userID int64) []*schema.Message {
 		output = append(output, &msg)
 	}
 	return output
+}
+
+func (m *MemoryStore) LockUserRequest(userID int64) func() {
+	state := m.getUserState(userID)
+	state.requestMu.Lock()
+	return state.requestMu.Unlock
 }
 
 // ========== user state map operations ==========
