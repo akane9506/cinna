@@ -13,10 +13,10 @@ import (
 
 const (
 	// number of history messages for conversation,  including assistant and user msg, should be enough
-	defaultMaxChatLength = 30
+	defaultMaxChatLength = 50
 
 	// number of history stored in the database
-	defaultMaxDBLength = 100
+	defaultMaxDBLength = 500
 
 	// flush buffer to the history db when buffer size equals or higher than this threshold
 	defaultFlushBufferThreshold = 2 // we can increase this when having a constant-running instance
@@ -35,7 +35,9 @@ type MemoryStore struct {
 }
 
 type userState struct {
-	mu      sync.Mutex // protects user's buffer and history read/write
+	mu        sync.Mutex // protects user's buffer and history read/write
+	requestMu sync.Mutex // serializes the user's requests - avoid concurrent msgs ruin the history
+
 	history []schema.Message
 	buffer  []schema.Message
 	loaded  bool
@@ -54,22 +56,30 @@ func NewMemoryStore(agentMemoryRepo ports.AgentMemoryRepository, logger *slog.Lo
 	return store
 }
 
-func (m *MemoryStore) Append(ctx context.Context, userID int64, msg *schema.Message) {
+func (m *MemoryStore) UpdateChatHistory(ctx context.Context, userID int64, msgs []*schema.Message) {
 	// we don't store system message.
 	// because system message will be inserted into the chat right before invoking the chat model
-	if msg == nil || msg.Role == schema.System {
+	if msgs == nil || len(msgs) == 0 {
 		return
 	}
 	userState := m.getUserState(userID)
 	userState.mu.Lock()
 	defer userState.mu.Unlock()
-	history := append(userState.history, *msg) // we should also include reasoning content in the history
-	cleanMessage := schema.Message{Role: msg.Role, Content: msg.Content}
-	userState.buffer = append(userState.buffer, cleanMessage)
-	if len(history) > m.maxChatLength {
-		history = history[len(history)-m.maxChatLength:]
+	numNewMsgs := len(msgs) - len(userState.history)
+	if numNewMsgs == 0 {
+		return
 	}
-	// check buffer size and decide whether to update db or not
+	newMsgs := msgs[len(msgs)-numNewMsgs:]
+	history := userState.history
+	buffer := userState.buffer
+	for _, msg := range newMsgs {
+		// currently let's allow the memory to grow. The new history compression method
+		// will be proposed in the next step
+		history = append(history, *msg)
+		buffer = append(buffer, *msg)
+	}
+	userState.history = history
+	userState.buffer = buffer
 	if m.shouldFlushBuffer(userState) {
 		if err := m.flushBuffer(ctx, userID, userState); err != nil {
 			m.logger.Error("error flush buffer history to DB",
@@ -78,7 +88,6 @@ func (m *MemoryStore) Append(ctx context.Context, userID int64, msg *schema.Mess
 			)
 		}
 	}
-	userState.history = history
 }
 
 func (m *MemoryStore) Get(ctx context.Context, userID int64) []*schema.Message {
@@ -101,6 +110,12 @@ func (m *MemoryStore) Get(ctx context.Context, userID int64) []*schema.Message {
 		output = append(output, &msg)
 	}
 	return output
+}
+
+func (m *MemoryStore) LockUserRequest(userID int64) func() {
+	state := m.getUserState(userID)
+	state.requestMu.Lock()
+	return state.requestMu.Unlock
 }
 
 // ========== user state map operations ==========

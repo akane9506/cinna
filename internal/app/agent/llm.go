@@ -4,9 +4,13 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 
+	"github.com/akane9506/cinna/internal/utils"
 	"github.com/cloudwego/eino-ext/components/model/deepseek"
+	"github.com/cloudwego/eino/callbacks"
+	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/compose"
 )
 
@@ -97,4 +101,30 @@ func GetDeepseekIsolationOptions(nodeNames []string, telegramUserID int64) []com
 		opts = append(opts, opt)
 	}
 	return opts
+}
+
+// Callbacks
+func MonitorLLMInputMessages(nodeNames []string) []compose.Option {
+	monitors := []compose.Option{}
+	logMsgsOnStartFn := callbacks.NewHandlerBuilder().OnStartFn(
+		func(ctx context.Context,
+			runInfo *callbacks.RunInfo,
+			input callbacks.CallbackInput) context.Context {
+			modelInput := model.ConvCallbackInput(input)
+			organizedMsgs := []string{}
+			for _, msg := range modelInput.Messages {
+				content := fmt.Sprintf(
+					"role: %s, content: %s",
+					msg.Role, utils.TruncateString(msg.Content, 20))
+				organizedMsgs = append(organizedMsgs, content)
+			}
+			fmt.Println("==========New Conversation==========")
+			fmt.Printf("%s\n", strings.Join(organizedMsgs, "\n"))
+			return ctx
+		})
+	for _, name := range nodeNames {
+		monitor := compose.WithCallbacks(logMsgsOnStartFn.Build()).DesignateNode(name)
+		monitors = append(monitors, monitor)
+	}
+	return monitors
 }

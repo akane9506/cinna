@@ -17,38 +17,24 @@ Cinna is a customizable Telegram ReAct agent bot built with Go and Eino. It supp
 
 ```mermaid
 flowchart LR
-    Start([START]) --> InputProcessLambda["Input Process Lambda<br/><br/>Processes input and stores necessary info in the state<br/><br/>In: TaskInput<br/>Out: schema.Message[]"]
-
-    InputProcessLambda --> IntentClassifier["Intent Classification<br/><br/>Classifies user intention and possible action<br/><br/>In: schema.Message[]<br/>Out: schema.Message"]
-
-    IntentClassifier --> IntentLambda["Intent Validation Lambda<br/><br/>Validates intent classification node output<br/>and feeds intention to output branching<br/><br/>In: schema.Message<br/>Out: schema.Message[]"]
-
-    IntentLambda --> IntentRouter{"Branch by Intent<br/><br/>SHOPPING | FEEDBACK | OTHER"}
-
-    IntentRouter -- SHOPPING --> ListLambda["List Shopping Items Lambda<br/><br/>Loads the user's active and expired items<br/>with IDs and categories<br/><br/>In: schema.Message[]<br/>Out: schema.Message[]"]
-
-    ListLambda --> ActionRouter{"Branch by Action<br/><br/>LIST | UPDATE | NONE"}
-
-    ActionRouter -- UPDATE --> ShoppingPlanner["Shopping Planner<br/><br/>Plans batched ADD, REMOVE, and MODIFY commands<br/>from chat history and current items; its raw output<br/>is not retained in conversation history<br/><br/>In: schema.Message[]<br/>Out: schema.Message"]
-
-    ShoppingPlanner --> ShoppingExecutor["Update Shopping List Lambda<br/><br/>Parses and validates commands, then updates PostgreSQL<br/><br/>In: schema.Message<br/>Out: schema.Message[]"]
-
-    ShoppingExecutor --> CinnaReply["Cinna Reply"]
-    ActionRouter -- LIST/NONE --> CinnaReply
-
-    IntentRouter -- FEEDBACK --> FeedbackListLambda["List Feedback Items Lambda<br/><br/>Loads pending and in-progress feedback for the planner<br/>when the action is UPDATE<br/><br/>In: schema.Message[]<br/>Out: schema.Message[]"]
-
-    FeedbackListLambda --> FeedbackActionRouter{"Branch by Action<br/><br/>UPDATE | LIST | NONE"}
-
-    FeedbackActionRouter -- UPDATE --> FeedbackPlanner["Feedback Planner<br/><br/>Determines feedback items to add or reopen;<br/>its raw output is not retained in conversation history<br/><br/>In: schema.Message[]<br/>Out: schema.Message"]
-
-    FeedbackPlanner --> FeedbackExecutor["Update Feedback Items Lambda<br/><br/>Parses planner output and writes feedback to PostgreSQL<br/><br/>In: schema.Message<br/>Out: schema.Message[]"]
-
-    FeedbackExecutor --> CinnaReply
-    FeedbackActionRouter -- LIST/NONE --> CinnaReply
+    Start(["START"]) --> InputProcessLambda["`**Input Process Lambda**<br><br>*Process input and store necessary info in the state*<br><br> In: *TaskInput<br>Out: []*schema.Message`"]
+    InputProcessLambda --> IntentClassifier["`**Intent Classification**<br><br>*classifies user intention and possible action*<br><br>In: []*schema.Message<br>Out: *schema.Message*`"]
+    IntentClassifier --> IntentLambda["`**Intent Validation Lambda**<br><br>*Validates intent classificaion node output, and feed intention to the output branching*<br><br>In: *schema.Message<br>Out: []*schema.Message`"]
+    IntentLambda --> IntentRouter["`**Branch by Intent**<br>Intent:<br>SHOPPING | FEEDBACK | OTHER<br>`"]
+    IntentRouter -- SHOPPING --> ListLambda["<b>List Lambda</b><br><br><i>List contents in the shopping list table <br>(note: 1 - list expired items, 2: items are with categories, notify cinna to responde with the corresponding category)</i><br><br>In: []*schema.Message<br>Out: []*schema.Message"]
+    ListLambda --> ActionRouter["`**Branch by Action Type**<br>Action:<br>LIST | UPDATE | None<br>`"]
+    ActionRouter -- UPDATE --> ShoppingPlanner@{ label: "**Shopping Planner**<br>(we don't save this output into history state)<br><br>*Reads user-cinna chat history and decide the Shopping DB operation*<br><br>In: []*schema.Message<br>Out: *schema.Message" }
+    ActionRouter -- LIST --> CinnaReply["CinnaReply"]
+    ShoppingPlanner --> UpdateShoppingListLambda["`**Update Shopping List Lambda**<br><br>Parse the output from the planner into an array of commands, then execute commands to update the DB shopping list<br><br>In:*schema.Message<br>out: []*schema.Message`"]
+    UpdateShoppingListLambda --> CinnaReply
+    IntentRouter -- FEEDBACK --> FeedbackListLambda["`**List Feedback Lambda**<br><br>Prepare pending/in-progress tasks for the Feedback Planner<br><br>In: []*schema.Message<br>Out: []*schema.Message`"]
+    FeedbackActionRouter -- NONE | LIST (we don't support LIST command for feedbacks) --> CinnaReply
+    FeedbackListLambda --> FeedbackActionRouter["<b>Branch by Action Type</b><br>Action:<br>List | UPDATE | NONE"]
+    FeedbackActionRouter -- UPDATE --> FeedbackPlanner@{ label: "**Feedback Planner**<br>(we don't save this output into history state as well)<br><br>Check the current user feedback lists, and decide which items should be added/updated.<br><br>In: []*schema.Message<br>Out: *schema.Message" }
+    FeedbackPlanner --> UpdateFeedbackLambda["<b>Update Feedback Items Lambda</b><br><br>Parse the output from the planner, then update the DB feedback list<br><br>In: *schema.Message<br>out: []*schema.Message"]
+    UpdateFeedbackLambda --> CinnaReply
     IntentRouter -- OTHER --> CinnaReply
-
-    CinnaReply --> End([END])
+    CinnaReply --> ProcessOutputLambda["<b>Process Output Lambda</b><br><br>Organize and output chat history, response, and other meta data<br><br>In: *schema.Message<br>out: *TaskOutput"] --> End(["END"])
 ```
 
 Current capabilities include:

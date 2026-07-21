@@ -10,10 +10,11 @@ import (
 )
 
 const (
-	processInputLambdaNodeName = "process_input"
-	intentLLMNodeName          = "intent_classification"
-	intentLambdaNodeName       = "intent_validation"
-	cinnaChatNodeName          = "cinna_response"
+	processInputLambdaNodeName  = "process_input"
+	intentLLMNodeName           = "intent_classification"
+	intentLambdaNodeName        = "intent_validation"
+	cinnaChatNodeName           = "cinna_response"
+	processOutputLambdaNodeName = "process_output"
 )
 
 type Intention struct {
@@ -155,6 +156,29 @@ func (a *CinnaReactAgent) prepareForCinnaChat(
 	state.SystemMessage = a.prompts.CinnaPersona
 	state.History = msgs
 	return msgs, nil
+}
+
+// ========== Task Output ========
+func (a *CinnaReactAgent) AddProcessOutputLambdaNode() {
+	a.graph.AddLambdaNode(
+		processOutputLambdaNodeName,
+		compose.InvokableLambda[*schema.Message, *TaskOutput](a.processTaskOutput),
+	)
+}
+
+func (a *CinnaReactAgent) processTaskOutput(
+	ctx context.Context, input *schema.Message) (*TaskOutput, error) {
+	output := &TaskOutput{}
+	output.outputMessage = input
+	compose.ProcessState[*CinnaAgentState](
+		ctx, func(ctx context.Context, state *CinnaAgentState) error {
+			history := cleanupOutputMessage(state.History)
+			output.chatHistory = make([]*schema.Message, 0, len(history)+1)
+			output.chatHistory = append(output.chatHistory, history...)
+			output.chatHistory = append(output.chatHistory, input)
+			return nil
+		})
+	return output, nil
 }
 
 // ========== Helper functions ==========

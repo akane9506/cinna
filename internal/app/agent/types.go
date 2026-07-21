@@ -3,7 +3,19 @@ package agent
 import (
 	"fmt"
 	"strings"
+
+	"github.com/cloudwego/eino/schema"
 )
+
+type TaskInput struct {
+	telegramUserID int64
+	chatHistory    []*schema.Message
+}
+
+type TaskOutput struct {
+	outputMessage *schema.Message
+	chatHistory   []*schema.Message
+}
 
 // For intent classification
 type Intent string
