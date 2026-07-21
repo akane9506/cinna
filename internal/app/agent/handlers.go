@@ -32,8 +32,8 @@ func (a *CinnaReactAgent) HandleText(
 		cinnaChatNodeName,
 	}, userID)
 
-	chatModelMonitors := MonitorLLMInputMessages([]string{cinnaChatNodeName})
-	chatModelOptions = append(chatModelOptions, chatModelMonitors...)
+	// chatModelMonitors := MonitorLLMInputMessages([]string{cinnaChatNodeName})
+	// chatModelOptions = append(chatModelOptions, chatModelMonitors...)
 
 	result, err := a.runner.Invoke(ctx, input, chatModelOptions...)
 	if err != nil {

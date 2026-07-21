@@ -67,7 +67,6 @@ func (m *MemoryStore) UpdateChatHistory(ctx context.Context, userID int64, msgs 
 	if numNewMsgs == 0 {
 		return
 	}
-	fmt.Println(len(msgs), len(userState.history))
 	newMsgs := msgs[len(msgs)-numNewMsgs:]
 	history := userState.history
 	buffer := userState.buffer
