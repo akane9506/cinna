@@ -63,17 +63,22 @@ func (m *MemoryStore) UpdateChatHistory(ctx context.Context, userID int64, msgs 
 	userState := m.getUserState(userID)
 	userState.mu.Lock()
 	defer userState.mu.Unlock()
-	numNewMsgs := len(msgs) - len(userState.buffer)
+	numNewMsgs := len(msgs) - len(userState.history)
 	if numNewMsgs == 0 {
 		return
 	}
+	fmt.Println(len(msgs), len(userState.history))
 	newMsgs := msgs[len(msgs)-numNewMsgs:]
+	history := userState.history
+	buffer := userState.buffer
 	for _, msg := range newMsgs {
 		// currently let's allow the memory to grow. The new history compression method
 		// will be proposed in the next step
-		userState.history = append(userState.history, *msg)
-		userState.buffer = append(userState.buffer, *msg)
+		history = append(history, *msg)
+		buffer = append(buffer, *msg)
 	}
+	userState.history = history
+	userState.buffer = buffer
 	if m.shouldFlushBuffer(userState) {
 		if err := m.flushBuffer(ctx, userID, userState); err != nil {
 			m.logger.Error("error flush buffer history to DB",

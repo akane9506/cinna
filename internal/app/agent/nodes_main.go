@@ -172,7 +172,10 @@ func (a *CinnaReactAgent) processTaskOutput(
 	output.outputMessage = input
 	compose.ProcessState[*CinnaAgentState](
 		ctx, func(ctx context.Context, state *CinnaAgentState) error {
-			output.chatHistory = state.History
+			history := cleanupOutputMessage(state.History)
+			output.chatHistory = make([]*schema.Message, 0, len(history)+1)
+			output.chatHistory = append(output.chatHistory, history...)
+			output.chatHistory = append(output.chatHistory, input)
 			return nil
 		})
 	return output, nil
