@@ -1,7 +1,19 @@
 package utils
 
-import "log/slog"
+import (
+	"log/slog"
+	"os"
+	"testing"
+)
 
+// Test utils
+func EnforceManualTest(t *testing.T) {
+	if os.Getenv("RUN_MANUAL_TEST") != "1" {
+		t.Skip("set RUN_MANUAL_TEST=1 to run manual LLM tests")
+	}
+}
+
+// GCP utils
 func LoggerReplaceLevelWithSeverity(groups []string, a slog.Attr) slog.Attr {
 	switch a.Key {
 	case slog.LevelKey:
@@ -24,4 +36,13 @@ func LoggerReplaceLevelWithSeverity(groups []string, a slog.Attr) slog.Attr {
 		a.Key = "message"
 	}
 	return a
+}
+
+// Helper functions
+func TruncateString(s string, maxRunes int) string {
+	runes := []rune(s)
+	if len(runes) <= maxRunes {
+		return s
+	}
+	return string(runes[:maxRunes]) + "..."
 }

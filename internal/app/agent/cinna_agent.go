@@ -17,9 +17,9 @@ import (
 type CinnaReactAgent struct {
 	chatModel *deepseek.ChatModel
 	jsonModel *deepseek.ChatModel
-	graph     *compose.Graph[*TaskInput, *schema.Message]
+	graph     *compose.Graph[*TaskInput, *TaskOutput]
 	prompts   *prompt.Prompts
-	runner    compose.Runnable[*TaskInput, *schema.Message]
+	runner    compose.Runnable[*TaskInput, *TaskOutput]
 	store     *memory.MemoryStore
 	repos     *ports.Repositories
 	logger    *slog.Logger
@@ -68,7 +68,7 @@ func initializeBaseAgent(
 		return nil, fmt.Errorf("failed to create cinna react agent: %w", err)
 	}
 	// initialize graph with local chat history state
-	graph := compose.NewGraph[*TaskInput, *schema.Message](
+	graph := compose.NewGraph[*TaskInput, *TaskOutput](
 		compose.WithGenLocalState(func(ctx context.Context) (state *CinnaAgentState) {
 			return &CinnaAgentState{
 				History: make([]*schema.Message, 0, 4),
@@ -88,7 +88,7 @@ func initializeBaseAgent(
 
 // ========= Build Graph ==========
 func (a *CinnaReactAgent) BuildGraph(
-	ctx context.Context) (compose.Runnable[*TaskInput, *schema.Message], error) {
+	ctx context.Context) (compose.Runnable[*TaskInput, *TaskOutput], error) {
 	graph := a.graph
 	a.AddProcessInputLambdaNode()
 	a.AddIntentClassificationNode()
@@ -103,6 +103,8 @@ func (a *CinnaReactAgent) BuildGraph(
 	a.AddUpdateFeedbacksLambdaNode()
 	// Cinna response
 	a.AddCinnaResponseNode()
+	// Model output
+	a.AddProcessOutputLambdaNode()
 
 	// edges
 	graph.AddEdge(compose.START, processInputLambdaNodeName)
@@ -118,7 +120,8 @@ func (a *CinnaReactAgent) BuildGraph(
 	graph.AddEdge(feedbacksUpdatePlannerLLMNodeName, updateFeedbackItemsLambdaNodeName)
 	graph.AddEdge(updateFeedbackItemsLambdaNodeName, cinnaChatNodeName)
 	// final step
-	graph.AddEdge(cinnaChatNodeName, compose.END)
+	graph.AddEdge(cinnaChatNodeName, processOutputLambdaNodeName)
+	graph.AddEdge(processOutputLambdaNodeName, compose.END)
 	runnable, err := graph.Compile(ctx)
 
 	if err != nil {

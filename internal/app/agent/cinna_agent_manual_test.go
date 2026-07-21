@@ -84,13 +84,14 @@ func TestCinnaChat(t *testing.T) {
 		telegramUserID: mockTelegramUserID,
 		chatHistory:    msgs,
 	})
-	t.Log(result.Content)
+	modelOutput := result.outputMessage
+	t.Log(modelOutput.Content)
 	t.Log("completion tokens: ",
-		result.ResponseMeta.Usage.CompletionTokens,
+		modelOutput.ResponseMeta.Usage.CompletionTokens,
 		"cache miss tokens: ",
-		result.ResponseMeta.Usage.PromptTokens-result.ResponseMeta.Usage.PromptTokenDetails.CachedTokens,
+		modelOutput.ResponseMeta.Usage.PromptTokens-modelOutput.ResponseMeta.Usage.PromptTokenDetails.CachedTokens,
 		"cache hit tokens: ",
-		result.ResponseMeta.Usage.PromptTokenDetails.CachedTokens,
+		modelOutput.ResponseMeta.Usage.PromptTokenDetails.CachedTokens,
 	)
 }
 
@@ -151,7 +152,7 @@ func TestShoppingTaskPlanningNode(t *testing.T) {
 		{Role: schema.User, Content: "Cinna可以帮我把牛奶和低筋面粉,和NyQuil加到购物车吗"},
 	}
 	result, err := runner.Invoke(ctx, input)
-	t.Log(result.Content)
+	t.Log(result.outputMessage.Content)
 	t.Log("========== DB manipulation test ==========")
 	msgs := []*schema.Message{
 		{
@@ -187,7 +188,7 @@ func TestShoppingTaskPlanningNode(t *testing.T) {
 		  ]*/
 	input.chatHistory = msgs
 	result, err = runner.Invoke(ctx, input)
-	t.Log(result.Content)
+	t.Log(result.outputMessage.Content)
 }
 
 func TestFeedbackPlannerNode(t *testing.T) {
@@ -210,7 +211,7 @@ func TestFeedbackPlannerNode(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Log(result.Content)
+	t.Log(result.outputMessage.Content)
 
 	// ========== Test Single Feedback With Conversation ==========
 	t.Log("\n" + strings.Repeat("=", 20) + "Test Single Feedback With Conversation" + strings.Repeat("=", 20))
@@ -223,7 +224,7 @@ func TestFeedbackPlannerNode(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Log(result.Content)
+	t.Log(result.outputMessage.Content)
 
 	// ========== Test Multiple Feedbacks With Conversation ==========
 	t.Log("\n" + strings.Repeat("=", 20) + "Test Single Feedback With Conversation" + strings.Repeat("=", 20))
@@ -236,21 +237,23 @@ func TestFeedbackPlannerNode(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Log(result.Content)
+	t.Log(result.outputMessage.Content)
 }
 
 // ========== Graph-Building For Manual Tests [DO NOT USE IN PRODUCTION] ==========
 func buildCinnaChatGraph(
-	ctx context.Context, agent CinnaReactAgent) (compose.Runnable[*TaskInput, *schema.Message], error) {
+	ctx context.Context, agent CinnaReactAgent) (compose.Runnable[*TaskInput, *TaskOutput], error) {
 	if agent.runner != nil {
 		return nil, fmt.Errorf("this is only for manual test, do not use it in production")
 	}
 	graph := agent.graph
 	agent.AddProcessInputLambdaNode()
 	agent.AddCinnaResponseNode()
+	agent.AddProcessOutputLambdaNode()
 	graph.AddEdge(compose.START, processInputLambdaNodeName)
 	graph.AddEdge(processInputLambdaNodeName, cinnaChatNodeName)
-	graph.AddEdge(cinnaChatNodeName, compose.END)
+	graph.AddEdge(cinnaChatNodeName, processOutputLambdaNodeName)
+	graph.AddEdge(processOutputLambdaNodeName, compose.END)
 	runnable, err := graph.Compile(ctx)
 	if err != nil {
 		agent.logger.Error("failed to compile manual cinna chat graph", "error", err)
@@ -260,16 +263,18 @@ func buildCinnaChatGraph(
 }
 
 func buildShoppingTaskPlanerGraph(
-	ctx context.Context, agent *CinnaReactAgent) (compose.Runnable[*TaskInput, *schema.Message], error) {
+	ctx context.Context, agent *CinnaReactAgent) (compose.Runnable[*TaskInput, *TaskOutput], error) {
 	if agent.runner != nil {
 		return nil, fmt.Errorf("this is only for manual test, do not use it in production")
 	}
 	graph := agent.graph
 	agent.AddProcessInputLambdaNode()
 	agent.AddShoppingTaskPlanningNode()
+	agent.AddProcessOutputLambdaNode()
 	graph.AddEdge(compose.START, processInputLambdaNodeName)
 	graph.AddEdge(processInputLambdaNodeName, shoppingTasksPlannerLLMNodeName)
-	graph.AddEdge(shoppingTasksPlannerLLMNodeName, compose.END)
+	graph.AddEdge(shoppingTasksPlannerLLMNodeName, processOutputLambdaNodeName)
+	graph.AddEdge(processOutputLambdaNodeName, compose.END)
 	runnable, err := graph.Compile(ctx)
 	if err != nil {
 		agent.logger.Error("failed to compile manual cinna chat graph", "error", err)
@@ -279,7 +284,7 @@ func buildShoppingTaskPlanerGraph(
 }
 
 func buildIntentLambdaOutputNode(
-	ctx context.Context, agent *CinnaReactAgent, t *testing.T) (compose.Runnable[*TaskInput, *schema.Message], error) {
+	ctx context.Context, agent *CinnaReactAgent, t *testing.T) (compose.Runnable[*TaskInput, *TaskOutput], error) {
 	if agent.runner != nil {
 		return nil, fmt.Errorf("this is only for manual test, do not use it in production")
 	}
@@ -304,11 +309,13 @@ func buildIntentLambdaOutputNode(
 			return input[len(input)-1], nil
 		}),
 	)
+	agent.AddProcessOutputLambdaNode()
 	graph.AddEdge(compose.START, processInputLambdaNodeName)
 	graph.AddEdge(processInputLambdaNodeName, intentLLMNodeName)
 	graph.AddEdge(intentLLMNodeName, intentLambdaNodeName)
 	graph.AddEdge(intentLambdaNodeName, "mock_final_output")
-	graph.AddEdge("mock_final_output", compose.END)
+	graph.AddEdge("mock_final_output", processOutputLambdaNodeName)
+	graph.AddEdge(processOutputLambdaNodeName, compose.END)
 	runnable, err := graph.Compile(ctx)
 	if err != nil {
 		t.Error("failed to compile manual intent lambda graph", "error", err)
@@ -320,17 +327,19 @@ func buildIntentLambdaOutputNode(
 func buildFeedbacksPlannerNode(
 	ctx context.Context,
 	agent *CinnaReactAgent,
-	t *testing.T) (compose.Runnable[*TaskInput, *schema.Message], error) {
+	t *testing.T) (compose.Runnable[*TaskInput, *TaskOutput], error) {
 	if agent.runner != nil {
 		return nil, fmt.Errorf("this is only for manual test, do not use it in production")
 	}
 	agent.AddProcessInputLambdaNode()
 	agent.AddFeedbacksPlanningNode()
+	agent.AddProcessOutputLambdaNode()
 
 	graph := agent.graph
 	graph.AddEdge(compose.START, processInputLambdaNodeName)
 	graph.AddEdge(processInputLambdaNodeName, feedbacksUpdatePlannerLLMNodeName)
-	graph.AddEdge(feedbacksUpdatePlannerLLMNodeName, compose.END)
+	graph.AddEdge(feedbacksUpdatePlannerLLMNodeName, processOutputLambdaNodeName)
+	graph.AddEdge(processOutputLambdaNodeName, compose.END)
 	runnable, err := graph.Compile(ctx)
 	if err != nil {
 		t.Error("failed to compile manual feedback planner graph", "error", err)

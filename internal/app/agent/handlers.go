@@ -6,11 +6,6 @@ import (
 	"github.com/cloudwego/eino/schema"
 )
 
-type TaskInput struct {
-	telegramUserID int64
-	chatHistory    []*schema.Message
-}
-
 func (a *CinnaReactAgent) HandleText(
 	ctx context.Context,
 	userID int64,
@@ -28,8 +23,8 @@ func (a *CinnaReactAgent) HandleText(
 		telegramUserID: userID,
 		chatHistory:    messages,
 	}
-	a.store.Append(ctx, userID, userMessage)
 
+	// context isolation for KV Cache optimization
 	chatModelOptions := GetDeepseekIsolationOptions([]string{
 		intentLLMNodeName,
 		shoppingTasksPlannerLLMNodeName,
@@ -37,40 +32,14 @@ func (a *CinnaReactAgent) HandleText(
 		cinnaChatNodeName,
 	}, userID)
 
-	// PRESERVE these for future use
-	// tempCallbackOnStart := compose.WithCallbacks(callbacks.NewHandlerBuilder().
-	// 	OnStartFn(func(ctx context.Context, runInfo *callbacks.RunInfo, input callbacks.CallbackInput) context.Context {
-	// 		modelInput := model.ConvCallbackInput(input)
-	// 		organizedStrings := []string{}
-	// 		for _, message := range modelInput.Messages {
-	// 			organizedStrings = append(organizedStrings, fmt.Sprintf("role: %s, content: %s", message.Role, message.Content[:10]))
-	// 		}
-	// 		logger.Info(
-	// 			"Chat model info - ",
-	// 			"Node name",
-	// 			runInfo.Component,
-	// 			"Contents",
-	// 			organizedStrings)
-	// 		return ctx
-	// 	}).Build()).DesignateNode(intentLLMNodeName)
-
-	// tempCallback := compose.WithCallbacks(callbacks.NewHandlerBuilder().
-	// 	OnEndFn(func(ctx context.Context, runInfo *callbacks.RunInfo, output callbacks.CallbackOutput) context.Context {
-	// 		modelOutput := model.ConvCallbackOutput(output)
-	// 		logger.Info(
-	// 			"Chat model info - ",
-	// 			"Node name",
-	// 			runInfo.Component,
-	// 			"Cached Tokens",
-	// 			modelOutput.Message.ResponseMeta.Usage.PromptTokenDetails.CachedTokens)
-	// 		return ctx
-	// 	}).Build()).DesignateNode(intentLLMNodeName)
+	chatModelMonitors := MonitorLLMInputMessages([]string{cinnaChatNodeName})
+	chatModelOptions = append(chatModelOptions, chatModelMonitors...)
 
 	result, err := a.runner.Invoke(ctx, input, chatModelOptions...)
 	if err != nil {
 		logger.Error("failed to get cinna response", "user_id", userID, "error", err)
 		return "", err
 	}
-	a.store.Append(ctx, userID, result)
-	return result.Content, nil
+	a.store.UpdateChatHistory(ctx, userID, result.chatHistory)
+	return result.outputMessage.Content, nil
 }
