@@ -1,12 +1,16 @@
-package agent
+// Shopping list workflow
+
+package core
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"strconv"
 	"strings"
 
+	"github.com/akane9506/cinna/internal/app/ports"
 	db "github.com/akane9506/cinna/internal/postgres"
 	"github.com/akane9506/cinna/internal/postgres/sqlc"
 	"github.com/cloudwego/eino/compose"
@@ -30,39 +34,58 @@ type UpdateShoppingListCommand struct {
 	Method   string `json:"method"`
 }
 
+func (a *AgentCore) RegisterShoppingListWorkflow() {
+	addListShoppingItemsLambda(a.graph, a.repos.ShoppingList, a.logger)
+	addShoppingTaskPlanningNode(a.graph, a.jsonModel, a.prompts.ShoppingListPlanner)
+	addRunShoppingTaskLambdaNode(a.graph, a.repos.ShoppingList, a.logger)
+}
+
+func (a *AgentCore) AddShoppingActionBranch() {
+	addShoppingActionBranch(a.graph)
+}
+
 // ========== List Shopping Items Lambda ==========
 // List shopping list items, separate into expired and unexpired group, and format into *schema.Message
 // in: *[]schema.Message | out: []*schema.Message
-func (a *CinnaReactAgent) AddListShoppingItemsLambda() {
-	a.graph.AddLambdaNode(
+func addListShoppingItemsLambda(
+	graph Graph, repo ports.ShoppingListRepository, logger *slog.Logger) {
+	graph.AddLambdaNode(
 		listShoppingItemsLambdaNodeName,
-		compose.InvokableLambda[[]*schema.Message, []*schema.Message](a.processShoppingListItems),
+		compose.InvokableLambda[[]*schema.Message, []*schema.Message](
+			processShoppingListItems(repo, logger)),
 	)
 }
 
-func (a *CinnaReactAgent) processShoppingListItems(
-	ctx context.Context, msgs []*schema.Message) ([]*schema.Message, error) {
-	compose.ProcessState[*CinnaAgentState](
-		ctx,
-		func(ctx context.Context, state *CinnaAgentState) error {
-			finalListMessage := a.listShoppingListItems(ctx, state)
-			msgs = append(msgs, finalListMessage)
-			state.History = append(state.History, finalListMessage)
-			return nil
-		},
-	)
-	return msgs, nil
+func processShoppingListItems(
+	repo ports.ShoppingListRepository,
+	logger *slog.Logger,
+) compose.InvokeWOOpt[[]*schema.Message, []*schema.Message] {
+	return func(ctx context.Context, msgs []*schema.Message) ([]*schema.Message, error) {
+		compose.ProcessState[*AgentState](
+			ctx,
+			func(ctx context.Context, state *AgentState) error {
+				finalListMessage := listShoppingListItems(ctx, state, repo, logger)
+				msgs = append(msgs, finalListMessage)
+				state.History = append(state.History, finalListMessage)
+				return nil
+			},
+		)
+		return msgs, nil
+	}
 }
 
 // query the database and get the shopping list items, separate them into
 // expired and unexpired parts
-func (a *CinnaReactAgent) listShoppingListItems(
+func listShoppingListItems(
 	ctx context.Context,
-	state *CinnaAgentState) *schema.Message {
-	logger := a.logger.With("Node", listShoppingItemsLambdaNodeName)
+	state *AgentState,
+	repo ports.ShoppingListRepository,
+	nodeLogger *slog.Logger,
+) *schema.Message {
+	logger := nodeLogger.With("Node", listShoppingItemsLambdaNodeName)
 	telegramUserID := state.TelegramUserID
 	// query database
-	shoppingListItems, err := a.repos.ShoppingList.ListShoppingListItems(ctx, telegramUserID)
+	shoppingListItems, err := repo.ListShoppingListItems(ctx, telegramUserID)
 	if err != nil {
 		logger.Error("failed to get shopping list items", "error", err)
 		return &schema.Message{
@@ -95,19 +118,19 @@ func (a *CinnaReactAgent) listShoppingListItems(
 
 // ========== Shopping Action Branch ==========
 // route the task to different branch based on the classified intent
-func (a *CinnaReactAgent) AddShoppingActionBranch() {
+func addShoppingActionBranch(graph Graph) {
 	endNodes := map[string]bool{}
 	endNodes[shoppingTasksPlannerLLMNodeName] = true
 	endNodes[cinnaChatNodeName] = true
-	a.graph.AddBranch(
+	graph.AddBranch(
 		listShoppingItemsLambdaNodeName,
-		compose.NewGraphBranch(a.shoppingActionBranch, endNodes))
+		compose.NewGraphBranch(shoppingActionBranch, endNodes))
 }
 
-func (a *CinnaReactAgent) shoppingActionBranch(ctx context.Context, out []*schema.Message) (string, error) {
+func shoppingActionBranch(ctx context.Context, out []*schema.Message) (string, error) {
 	var next string
-	compose.ProcessState[*CinnaAgentState](
-		ctx, func(ctx context.Context, state *CinnaAgentState) error {
+	compose.ProcessState[*AgentState](
+		ctx, func(ctx context.Context, state *AgentState) error {
 			switch state.ActionType {
 			case ActionUpdate:
 				next = shoppingTasksPlannerLLMNodeName
@@ -124,20 +147,22 @@ func (a *CinnaReactAgent) shoppingActionBranch(ctx context.Context, out []*schem
 // ========== Shopping List Update Planner ==========
 // Plans the task based on the database and user's description
 // in: []*schema.Message | out: *schema.Message
-func (a *CinnaReactAgent) AddShoppingTaskPlanningNode() {
-	a.graph.AddChatModelNode(shoppingTasksPlannerLLMNodeName, a.jsonModel,
-		compose.WithStatePreHandler(a.prepareForShoppingTaskPlanning),
+func addShoppingTaskPlanningNode(graph Graph, jsonModel JSONModel, prompt string) {
+	graph.AddChatModelNode(shoppingTasksPlannerLLMNodeName, jsonModel,
+		compose.WithStatePreHandler(prepareForShoppingTaskPlanning(prompt)),
 	)
 }
 
-func (a *CinnaReactAgent) prepareForShoppingTaskPlanning(
-	ctx context.Context,
-	input []*schema.Message,
-	state *CinnaAgentState) ([]*schema.Message, error) {
-	state.SystemMessage = a.prompts.ShoppingListPlanner
-	msgs := organizeInputMessage(input, state.SystemMessage)
-	state.History = msgs
-	return msgs, nil
+func prepareForShoppingTaskPlanning(
+	prompt string,
+) compose.StatePreHandler[[]*schema.Message, *AgentState] {
+	return func(ctx context.Context,
+		input []*schema.Message,
+		state *AgentState) ([]*schema.Message, error) {
+		msgs := organizeInputMessage(input, prompt)
+		state.History = msgs
+		return msgs, nil
+	}
 }
 
 // ========== Update Shopping List Lambda ==========
@@ -152,34 +177,42 @@ type ShoppingListCommandParams struct {
 
 type ShoppingListCommands map[DBMethod]*ShoppingListCommandParams
 
-func (a *CinnaReactAgent) AddRunShoppingTaskLambdaNode() {
-	a.graph.AddLambdaNode(
+func addRunShoppingTaskLambdaNode(
+	graph Graph, repo ports.ShoppingListRepository, logger *slog.Logger) {
+	graph.AddLambdaNode(
 		shoppingTaskRunLambdaNodeName,
-		compose.InvokableLambda[*schema.Message, []*schema.Message](a.runShoppingListCommands),
+		compose.InvokableLambda[*schema.Message, []*schema.Message](
+			runShoppingListCommands(repo, logger)),
 	)
 }
 
-func (a *CinnaReactAgent) runShoppingListCommands(
-	ctx context.Context, msg *schema.Message) ([]*schema.Message, error) {
-	// parse input message into commands
-	commands := a.parseShoppingListCommands(msg.Content)
-	var telegramUserID int64
-	var msgs []*schema.Message
-	compose.ProcessState[*CinnaAgentState](ctx,
-		func(ctx context.Context, state *CinnaAgentState) error {
-			telegramUserID = state.TelegramUserID
-			msgs = state.History
-			return nil
-		})
-	// execute commands
-	result := a.executeShoppingListCommands(ctx, telegramUserID, commands)
-	msgs = append(msgs, result)
-	return msgs, nil
+func runShoppingListCommands(
+	repo ports.ShoppingListRepository,
+	logger *slog.Logger,
+) compose.InvokeWOOpt[*schema.Message, []*schema.Message] {
+	return func(ctx context.Context, msg *schema.Message) ([]*schema.Message, error) {
+		// parse input message into commands
+		commands := parseShoppingListCommands(msg.Content, logger)
+		var telegramUserID int64
+		var msgs []*schema.Message
+		compose.ProcessState[*AgentState](ctx,
+			func(ctx context.Context, state *AgentState) error {
+				telegramUserID = state.TelegramUserID
+				msgs = state.History
+				return nil
+			})
+		// execute commands
+		result := executeShoppingListCommands(ctx, telegramUserID, commands, repo, logger)
+		msgs = append(msgs, result)
+		return msgs, nil
+	}
 }
 
-func (a *CinnaReactAgent) parseShoppingListCommands(
-	rawMessage string) ShoppingListCommands {
-	logger := a.logger.With("Node", shoppingTaskRunLambdaNodeName)
+func parseShoppingListCommands(
+	rawMessage string,
+	nodeLogger *slog.Logger,
+) ShoppingListCommands {
+	logger := nodeLogger.With("Node", shoppingTaskRunLambdaNodeName)
 	organizedCommands := ShoppingListCommands{}
 	// parse message into commands
 	var rawCommands UpdateShoppingListCommands
@@ -225,10 +258,14 @@ func (a *CinnaReactAgent) parseShoppingListCommands(
 	return organizedCommands
 }
 
-func (a *CinnaReactAgent) executeShoppingListCommands(
-	ctx context.Context, telegramID int64, commands ShoppingListCommands) *schema.Message {
-	logger := a.logger.With("Node", shoppingTaskRunLambdaNodeName)
-	shoppingListRepo := a.repos.ShoppingList
+func executeShoppingListCommands(
+	ctx context.Context,
+	telegramID int64,
+	commands ShoppingListCommands,
+	shoppingListRepo ports.ShoppingListRepository,
+	nodeLogger *slog.Logger,
+) *schema.Message {
+	logger := nodeLogger.With("Node", shoppingTaskRunLambdaNodeName)
 	var messageContents []string
 	// add items to shopping list
 	for method := range commands {

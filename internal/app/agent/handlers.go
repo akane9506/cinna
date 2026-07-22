@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 
+	"github.com/akane9506/cinna/internal/app/agent/core"
 	"github.com/cloudwego/eino/schema"
 )
 
@@ -23,27 +24,17 @@ func (a *CinnaReactAgent) HandleText(
 	userMessage := schema.UserMessage(text)
 	messages := a.store.Get(ctx, userID)
 	messages = append(messages, userMessage)
-	input := &TaskInput{
-		telegramUserID: userID,
-		chatHistory:    messages,
+	input := &core.GraphInput{
+		TelegramUserID: userID,
+		ChatHistory:    messages,
 	}
 
-	// context isolation for KV Cache optimization
-	chatModelOptions := GetDeepseekIsolationOptions([]string{
-		intentLLMNodeName,
-		shoppingTasksPlannerLLMNodeName,
-		feedbacksUpdatePlannerLLMNodeName,
-		cinnaChatNodeName,
-	}, userID)
-
-	// chatModelMonitors := MonitorLLMInputMessages([]string{cinnaChatNodeName})
-	// chatModelOptions = append(chatModelOptions, chatModelMonitors...)
-
-	result, err := a.runner.Invoke(ctx, input, chatModelOptions...)
+	runtimeOptions := a.core.GetGraphRuntimeOptions(userID)
+	result, err := a.runner.Invoke(ctx, input, runtimeOptions...)
 	if err != nil {
 		logger.Error("failed to get cinna response", "user_id", userID, "error", err)
 		return "", err
 	}
-	a.store.UpdateChatHistory(ctx, userID, result.chatHistory)
-	return result.outputMessage.Content, nil
+	a.store.UpdateChatHistory(ctx, userID, result.ChatHistory)
+	return result.OutputMessage.Content, nil
 }

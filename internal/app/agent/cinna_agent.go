@@ -6,23 +6,17 @@ import (
 	"log/slog"
 
 	"github.com/akane9506/cinna/internal/app"
+	"github.com/akane9506/cinna/internal/app/agent/core"
 	"github.com/akane9506/cinna/internal/app/agent/memory"
-	"github.com/akane9506/cinna/internal/app/agent/prompt"
 	"github.com/akane9506/cinna/internal/app/ports"
-	"github.com/cloudwego/eino-ext/components/model/deepseek"
 	"github.com/cloudwego/eino/compose"
-	"github.com/cloudwego/eino/schema"
 )
 
 type CinnaReactAgent struct {
-	chatModel *deepseek.ChatModel
-	jsonModel *deepseek.ChatModel
-	graph     *compose.Graph[*TaskInput, *TaskOutput]
-	prompts   *prompt.Prompts
-	runner    compose.Runnable[*TaskInput, *TaskOutput]
-	store     *memory.MemoryStore
-	repos     *ports.Repositories
-	logger    *slog.Logger
+	core   *core.AgentCore
+	runner compose.Runnable[*core.GraphInput, *core.GraphOutput]
+	store  *memory.MemoryStore
+	logger *slog.Logger
 }
 
 // Create a new agent with graph and runner built
@@ -31,102 +25,19 @@ func NewCinnaReactAgent(
 	config *app.Config,
 	repos *ports.Repositories,
 	logger *slog.Logger) (*CinnaReactAgent, error) {
-	agent, err := initializeBaseAgent(ctx, config, logger)
+	agent := new(CinnaReactAgent)
+	core, err := core.InitializeAgentCore(ctx, config, repos, logger)
 	if err != nil {
 		return nil, err
 	}
-	agent.repos = repos
-	agent.store = memory.NewMemoryStore(repos.AgentMemory, agent.logger)
+	agent.logger = logger
+	agent.core = core
+	agent.store = memory.NewMemoryStore(repos.AgentMemory, logger)
 	// compile graph and create a runner
-	runner, err := agent.BuildGraph(ctx)
+	runner, err := core.BuildGraph(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create cinna agent runner: %w", err)
 	}
 	agent.runner = runner
 	return agent, nil
-}
-
-// initialize a raw agent
-func initializeBaseAgent(
-	ctx context.Context,
-	config *app.Config,
-	logger *slog.Logger,
-) (*CinnaReactAgent, error) {
-	apiKey := &APIKey{
-		Deepseek: config.DeepseekAPIKey,
-	}
-	// load prompts
-	prompts := prompt.LoadPromptFiles(logger)
-	// create LLM models
-	models := NewLLMModels(apiKey, logger)
-	chatModel, err := models.CreateDeepseekFlashModel(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create cinna react agent: %w", err)
-	}
-	jsonModel, err := models.CreateDeepseekFlashJSONModel(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create cinna react agent: %w", err)
-	}
-	// initialize graph with local chat history state
-	graph := compose.NewGraph[*TaskInput, *TaskOutput](
-		compose.WithGenLocalState(func(ctx context.Context) (state *CinnaAgentState) {
-			return &CinnaAgentState{
-				History: make([]*schema.Message, 0, 4),
-			}
-		}),
-	)
-	// create the agent
-	agent := &CinnaReactAgent{
-		chatModel: chatModel,
-		jsonModel: jsonModel,
-		graph:     graph,
-		prompts:   prompts,
-		logger:    logger,
-	}
-	return agent, nil
-}
-
-// ========= Build Graph ==========
-func (a *CinnaReactAgent) BuildGraph(
-	ctx context.Context) (compose.Runnable[*TaskInput, *TaskOutput], error) {
-	graph := a.graph
-	a.AddProcessInputLambdaNode()
-	a.AddIntentClassificationNode()
-	a.AddIntentOutputLambdaNode()
-	// shopping branch
-	a.AddListShoppingItemsLambda()
-	a.AddShoppingTaskPlanningNode()
-	a.AddRunShoppingTaskLambdaNode()
-	// feedbacks branch
-	a.AddListFeedbackItemsLambda()
-	a.AddFeedbacksPlanningNode()
-	a.AddUpdateFeedbacksLambdaNode()
-	// Cinna response
-	a.AddCinnaResponseNode()
-	// Model output
-	a.AddProcessOutputLambdaNode()
-
-	// edges
-	graph.AddEdge(compose.START, processInputLambdaNodeName)
-	graph.AddEdge(processInputLambdaNodeName, intentLLMNodeName)
-	graph.AddEdge(intentLLMNodeName, intentLambdaNodeName)
-	a.AddIntentBranch()
-	// shopping branch
-	a.AddShoppingActionBranch()
-	graph.AddEdge(shoppingTasksPlannerLLMNodeName, shoppingTaskRunLambdaNodeName)
-	graph.AddEdge(shoppingTaskRunLambdaNodeName, cinnaChatNodeName)
-	// feedbacks branch
-	a.AddFeedbacksActionBranch()
-	graph.AddEdge(feedbacksUpdatePlannerLLMNodeName, updateFeedbackItemsLambdaNodeName)
-	graph.AddEdge(updateFeedbackItemsLambdaNodeName, cinnaChatNodeName)
-	// final step
-	graph.AddEdge(cinnaChatNodeName, processOutputLambdaNodeName)
-	graph.AddEdge(processOutputLambdaNodeName, compose.END)
-	runnable, err := graph.Compile(ctx)
-
-	if err != nil {
-		a.logger.Error("failed to run manual cinna chat graph", "error", err)
-		return nil, err
-	}
-	return runnable, nil
 }

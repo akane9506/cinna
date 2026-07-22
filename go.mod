@@ -3,7 +3,7 @@ module github.com/akane9506/cinna
 go 1.26.3
 
 require (
-	github.com/cloudwego/eino v0.7.13
+	github.com/cloudwego/eino v0.9.12
 	github.com/cloudwego/eino-ext/components/model/deepseek v0.1.6
 	github.com/go-telegram/bot v1.21.0
 	github.com/jackc/pgx/v5 v5.10.0
