@@ -1,4 +1,4 @@
-package agent
+package core
 
 import (
 	"fmt"
@@ -7,14 +7,14 @@ import (
 	"github.com/cloudwego/eino/schema"
 )
 
-type TaskInput struct {
-	telegramUserID int64
-	chatHistory    []*schema.Message
+type GraphInput struct {
+	TelegramUserID int64
+	ChatHistory    []*schema.Message
 }
 
-type TaskOutput struct {
-	outputMessage *schema.Message
-	chatHistory   []*schema.Message
+type GraphOutput struct {
+	OutputMessage *schema.Message
+	ChatHistory   []*schema.Message
 }
 
 // For intent classification
@@ -101,4 +101,42 @@ func normalizeShoppingCategory(raw string) ShoppingCategory {
 	default:
 		return ShoppingOther
 	}
+}
+
+// log messages with fmt.Println method, not logging
+func logMessages(title string, msgs []*schema.Message) {
+	fmt.Println()
+	fmt.Println("Start Logging", title)
+	for _, msg := range msgs {
+		fmt.Println(fmt.Sprintf("[%s] %s", msg.Role, msg.Content))
+	}
+	fmt.Println()
+}
+
+// clean up messages and insert system prompt at the beginning of the message queue
+func organizeInputMessage(input []*schema.Message, systemPrompt string) []*schema.Message {
+	// inject intent classification prompt
+	msgs := []*schema.Message{
+		&schema.Message{Role: schema.System, Content: systemPrompt}}
+	// include Tool and Assistant chat history
+	for _, msg := range input {
+		if msg.Role == schema.System {
+			continue // we just ignore system message here
+		} else {
+			msgs = append(msgs, msg)
+		}
+	}
+	return msgs
+}
+
+// exclude unnecessary messages from the collection of message
+func cleanupOutputMessage(output []*schema.Message) []*schema.Message {
+	msgs := []*schema.Message{}
+	for _, msg := range output {
+		if msg.Role == schema.System {
+			continue
+		}
+		msgs = append(msgs, msg)
+	}
+	return msgs
 }
