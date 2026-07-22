@@ -105,8 +105,8 @@ func (a *AgentCore) GetGraphRuntimeOptions(userID int64) []compose.Option {
 		feedbacksUpdatePlannerLLMNodeName,
 		cinnaChatNodeName,
 	}, userID)
-	monitorOptions := MonitorLLMInputMessages([]string{cinnaChatNodeName})
+	// monitorOptions := MonitorLLMInputMessages([]string{cinnaChatNodeName})
 	options = append(options, isolationOptions...)
-	options = append(options, monitorOptions...)
+	// options = append(options, monitorOptions...)
 	return options
 }
