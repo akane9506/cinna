@@ -15,6 +15,8 @@ import (
 )
 
 const (
+	FEEDBACK_DATA_PREFIX = "[DB_FEEDBACKS]"
+
 	listFeedbackItemsLambdaNodeName   = "list_feedback_items"
 	feedbacksUpdatePlannerLLMNodeName = "plan_feedback_updates"
 	updateFeedbackItemsLambdaNodeName = "update_feedback_items"
@@ -91,7 +93,8 @@ func listFeedbackItems(
 		feedbackContents = append(feedbackContents, row.Content)
 	}
 	message := fmt.Sprintf(
-		"feedbacks in the current database: [%s]",
+		"%s feedbacks in the current database: [%s]",
+		FEEDBACK_DATA_PREFIX,
 		strings.Join(feedbackContents, ", "),
 	)
 	return &schema.Message{
@@ -164,11 +167,11 @@ func addUpdateFeedbacksLambdaNode(
 	graph.AddLambdaNode(
 		updateFeedbackItemsLambdaNodeName,
 		compose.InvokableLambda[*schema.Message, []*schema.Message](
-			executeUpdateFeedbacks(repo, logger)),
+			runUpdateFeedbacksCommands(repo, logger)),
 	)
 }
 
-func executeUpdateFeedbacks(
+func runUpdateFeedbacksCommands(
 	feedbacksRepo ports.FeedbacksRepository,
 	nodeLogger *slog.Logger,
 ) compose.InvokeWOOpt[*schema.Message, []*schema.Message] {
@@ -184,48 +187,73 @@ func executeUpdateFeedbacks(
 				msgs = state.History
 				return nil
 			})
+		msgs = excludeFeedbackData(msgs)
 		if len(newFeedbacks.Items) > 0 {
-			result, err := feedbacksRepo.CreateFeedbackItems(
-				ctx, telegramUserID, newFeedbacks.Items)
-			if err != nil {
-				logger.Error("failed to update the feedbacks to db", "error", err)
-				msgs = append(msgs, &schema.Message{
-					Role:    schema.Assistant,
-					Content: "failed to add the feedbacks, please let user know and make apology",
-				})
-				return msgs, nil
-			}
-			addedFeedbacks := []string{}
-			for _, feedback := range result {
-				addedFeedbacks = append(addedFeedbacks, feedback.Content)
-			}
-			if len(addedFeedbacks) > 0 {
-				msgs = append(msgs, &schema.Message{
-					Role: schema.Assistant,
-					Content: fmt.Sprintf(
-						"added the following feedbacks to the database: [%s].",
-						strings.Join(addedFeedbacks, ", ")),
-				})
-				// add additional instruction to avoid unveiling details of the feedbacks to the user
-				msgs = append(msgs, &schema.Message{
-					Role:    schema.Assistant,
-					Content: "let user know the added feedbacks but don't unveil the conversation summary and possible reasons",
-				})
-			}
+			results := executeFeedbacksCommands(
+				ctx, feedbacksRepo, telegramUserID, newFeedbacks, logger)
+			msgs = append(msgs, results...)
 		}
 		return msgs, nil
 	}
 }
 
+func executeFeedbacksCommands(
+	ctx context.Context,
+	feedbacksRepo ports.FeedbacksRepository,
+	telegramUserID int64,
+	newFeedbacks *FeedbackItems,
+	logger *slog.Logger,
+) []*schema.Message {
+	msgs := []*schema.Message{}
+	result, err := feedbacksRepo.CreateFeedbackItems(
+		ctx, telegramUserID, newFeedbacks.Items)
+	if err != nil {
+		logger.Error("failed to update the feedbacks to db", "error", err)
+		msgs = append(msgs, &schema.Message{
+			Role:    schema.Assistant,
+			Content: "failed to add the feedbacks, please let user know and make apology",
+		})
+		return msgs
+	}
+	addedFeedbacks := []string{}
+	for _, feedback := range result {
+		addedFeedbacks = append(addedFeedbacks, feedback.Content)
+	}
+	if len(addedFeedbacks) > 0 {
+		msgs = append(msgs, &schema.Message{
+			Role: schema.Assistant,
+			Content: fmt.Sprintf(
+				"added the following feedbacks to the database: [%s].",
+				strings.Join(addedFeedbacks, ", ")),
+		})
+		// add additional instruction to avoid unveiling details of the feedbacks to the user
+		msgs = append(msgs, &schema.Message{
+			Role:    schema.Assistant,
+			Content: "let user know the added feedbacks but don't unveil the conversation summary and possible reasons",
+		})
+	}
+	return msgs
+}
+
 func parseFeedbackItems(
 	ctx context.Context,
 	rawMessage string,
-	nodeLogger *slog.Logger) *FeedbackItems {
-	logger := nodeLogger.With("Node", updateFeedbackItemsLambdaNodeName)
+	logger *slog.Logger) *FeedbackItems {
 	var feedbackItems FeedbackItems
 	if err := json.Unmarshal([]byte(rawMessage), &feedbackItems); err != nil {
 		logger.Error("Invalid feedback tasks json", "error", err)
 		return &FeedbackItems{Items: []string{}} // return empty object
 	}
 	return &feedbackItems
+}
+
+func excludeFeedbackData(msgs []*schema.Message) []*schema.Message {
+	output := []*schema.Message{}
+	for _, msg := range msgs {
+		if strings.HasPrefix(msg.Content, FEEDBACK_DATA_PREFIX) {
+			continue
+		}
+		output = append(output, msg)
+	}
+	return output
 }

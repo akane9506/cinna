@@ -18,12 +18,13 @@ type ChatModel = *deepseek.ChatModel
 type JSONModel = *deepseek.ChatModel
 
 type AgentCore struct {
-	chatModel ChatModel
-	jsonModel JSONModel
-	graph     Graph
-	prompts   *prompt.Prompts
-	repos     *ports.Repositories
-	logger    *slog.Logger
+	chatModel  ChatModel
+	jsonModel  JSONModel
+	graph      Graph
+	prompts    *prompt.Prompts
+	repos      *ports.Repositories
+	logger     *slog.Logger
+	runtimeEnv string
 }
 
 func InitializeAgentCore(
@@ -55,12 +56,13 @@ func InitializeAgentCore(
 		}),
 	)
 	agentCore := &AgentCore{
-		chatModel: chatModel,
-		jsonModel: jsonModel,
-		repos:     repos,
-		graph:     graph,
-		prompts:   prompts,
-		logger:    logger,
+		chatModel:  chatModel,
+		jsonModel:  jsonModel,
+		repos:      repos,
+		graph:      graph,
+		prompts:    prompts,
+		logger:     logger,
+		runtimeEnv: config.RuntimeEnv,
 	}
 	return agentCore, nil
 }
@@ -105,8 +107,10 @@ func (a *AgentCore) GetGraphRuntimeOptions(userID int64) []compose.Option {
 		feedbacksUpdatePlannerLLMNodeName,
 		cinnaChatNodeName,
 	}, userID)
-	// monitorOptions := MonitorLLMInputMessages([]string{cinnaChatNodeName})
 	options = append(options, isolationOptions...)
-	// options = append(options, monitorOptions...)
+	if a.runtimeEnv == app.RuntimeDev {
+		monitorOptions := MonitorLLMInputMessages([]string{cinnaChatNodeName})
+		options = append(options, monitorOptions...)
+	}
 	return options
 }

@@ -24,7 +24,6 @@ const (
 	IntentOther    Intent = "OTHER"
 	IntentShopping Intent = "SHOPPING"
 	IntentFeedback Intent = "FEEDBACK"
-	IntentFailed   Intent = "FAILED"
 )
 
 // for action classification
@@ -64,7 +63,7 @@ func normalizeIntent(raw string) Intent {
 	case IntentShopping, IntentFeedback, IntentOther:
 		return intent
 	default:
-		return IntentFailed
+		return IntentOther
 	}
 }
 

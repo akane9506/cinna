@@ -4,96 +4,15 @@ package core
 // 	"context"
 // 	"encoding/json"
 // 	"fmt"
-// 	"io"
 // 	"log/slog"
 // 	"os"
-// 	"strings"
 // 	"testing"
 
-// 	"github.com/akane9506/cinna/internal/app"
 // 	"github.com/akane9506/cinna/internal/utils"
-// 	"github.com/cloudwego/eino/compose"
 // 	"github.com/cloudwego/eino/schema"
 // )
 
 // const mockTelegramUserID = 181496207
-
-// func TestDeepseekFlashModelManual(t *testing.T) {
-// 	models, ctx := setupDeepseekModelTesting(t)
-// 	chatModel, err := models.CreateDeepseekFlashModel(ctx)
-// 	if err != nil {
-// 		t.Fatal(err)
-// 	}
-// 	resp, err := chatModel.Generate(ctx, []*schema.Message{
-// 		schema.UserMessage("Say hello in 3 different languages"),
-// 	})
-// 	if err != nil {
-// 		t.Fatal(err)
-// 	}
-// 	t.Log(resp.Content)
-// }
-
-// func TestDeepseekFlashJSONModelManual(t *testing.T) {
-// 	models, ctx := setupDeepseekModelTesting(t)
-// 	jsonModel, err := models.CreateDeepseekFlashJSONModel(ctx)
-// 	if err != nil {
-// 		t.Fatal(err)
-// 	}
-// 	resp, err := jsonModel.Generate(ctx, []*schema.Message{
-// 		schema.SystemMessage(`
-// The user will provide some exam text. please answer the question.
-
-// EXAMPLE INPUT:
-// Which is the highest mountain in the world? Mount Everest.
-
-// EXAMPLE JSON OUTPUT:
-// {
-//     "question": "Which is the highest mountain in the world?",
-//     "answer": "Mount Everest"
-// }`),
-// 		schema.UserMessage("What is a good way to create a graph agent?"),
-// 	})
-// 	if err != nil {
-// 		t.Fatal(err)
-// 	}
-// 	t.Log(resp.Role, resp.Content)
-// 	var parsedResponse struct {
-// 		Question string `json:"question"`
-// 		Answer   string `json:"answer"`
-// 	}
-// 	if err := json.Unmarshal([]byte(resp.Content), &parsedResponse); err != nil {
-// 		t.Fatal(err)
-// 	}
-// 	t.Log(fmt.Sprintf("%+v", parsedResponse))
-// }
-
-// func TestCinnaChat(t *testing.T) {
-// 	ctx := context.Background()
-// 	agent, err := setupAgent(t, ctx)
-// 	if err != nil {
-// 		t.Fatal(err)
-// 	}
-// 	runnable, err := buildCinnaChatGraph(ctx, *agent)
-// 	if err != nil {
-// 		t.Fatal(err)
-// 	}
-// 	msgs := []*schema.Message{
-// 		&schema.Message{Role: schema.User, Content: "你好呀Cinna"},
-// 	}
-// 	result, err := runnable.Invoke(ctx, &TaskInput{
-// 		telegramUserID: mockTelegramUserID,
-// 		chatHistory:    msgs,
-// 	})
-// 	modelOutput := result.outputMessage
-// 	t.Log(modelOutput.Content)
-// 	t.Log("completion tokens: ",
-// 		modelOutput.ResponseMeta.Usage.CompletionTokens,
-// 		"cache miss tokens: ",
-// 		modelOutput.ResponseMeta.Usage.PromptTokens-modelOutput.ResponseMeta.Usage.PromptTokenDetails.CachedTokens,
-// 		"cache hit tokens: ",
-// 		modelOutput.ResponseMeta.Usage.PromptTokenDetails.CachedTokens,
-// 	)
-// }
 
 // func TestIntentLambda(t *testing.T) {
 // 	ctx := context.Background()
@@ -347,7 +266,7 @@ package core
 // 	return runnable, nil
 // }
 
-// // ========== Agent / Model Setup ==========
+// ========== Agent / Model Setup ==========
 
 // func setupDeepseekModelTesting(t *testing.T) (*Models, context.Context) {
 // 	utils.EnforceManualTest(t)
@@ -362,7 +281,7 @@ package core
 // 	return models, ctx
 // }
 
-// func setupAgent(t *testing.T, ctx context.Context) (*CinnaReactAgent, error) {
+// func setupAgent(t *testing.T, ctx context.Context) (*AgentState, error) {
 // 	utils.EnforceManualTest(t)
 // 	config, err := app.LoadConfig()
 // 	if err != nil {
