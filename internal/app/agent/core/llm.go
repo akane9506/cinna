@@ -91,20 +91,20 @@ func (m *Models) CreateDeepseekFlashJSONModel(ctx context.Context) (*deepseek.Ch
 }
 
 // KV Cache isolation
-func GetDeepseekIsolationOptions(nodeNames []string, telegramUserID int64) []compose.Option {
+func GetDeepseekIsolationOptions(nodePaths []*compose.NodePath, telegramUserID int64) []compose.Option {
 	opts := []compose.Option{}
-	for _, name := range nodeNames {
-		isolationID := fmt.Sprintf("cinna:%d:node:%s", telegramUserID, name)
+	for _, path := range nodePaths {
+		isolationID := fmt.Sprintf("cinna:%d:node:%s", telegramUserID, path)
 		opt := compose.WithChatModelOption(deepseek.WithExtraFields(map[string]interface{}{
 			"user_id": isolationID,
-		})).DesignateNode(name)
+		})).DesignateNodeWithPath(path)
 		opts = append(opts, opt)
 	}
 	return opts
 }
 
 // Callbacks
-func MonitorLLMInputMessages(nodeNames []string) []compose.Option {
+func MonitorLLMInputMessagesWithPath(nodePaths []*compose.NodePath) []compose.Option {
 	monitors := []compose.Option{}
 	logMsgsOnStartFn := callbacks.NewHandlerBuilder().OnStartFn(
 		func(ctx context.Context,
@@ -122,8 +122,8 @@ func MonitorLLMInputMessages(nodeNames []string) []compose.Option {
 			fmt.Printf("%s\n", strings.Join(organizedMsgs, "\n"))
 			return ctx
 		})
-	for _, name := range nodeNames {
-		monitor := compose.WithCallbacks(logMsgsOnStartFn.Build()).DesignateNode(name)
+	for _, path := range nodePaths {
+		monitor := compose.WithCallbacks(logMsgsOnStartFn.Build()).DesignateNodeWithPath(path)
 		monitors = append(monitors, monitor)
 	}
 	return monitors

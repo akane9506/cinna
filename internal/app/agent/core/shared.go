@@ -7,6 +7,8 @@ import (
 	"github.com/cloudwego/eino/schema"
 )
 
+const SENSITIVE_PREFIX = "[SENSITIVE]"
+
 type GraphInput struct {
 	TelegramUserID int64
 	ChatHistory    []*schema.Message
@@ -121,6 +123,26 @@ func organizeInputMessage(input []*schema.Message, systemPrompt string) []*schem
 	for _, msg := range input {
 		if msg.Role == schema.System {
 			continue // we just ignore system message here
+		} else {
+			msgs = append(msgs, msg)
+		}
+	}
+	return msgs
+}
+
+// clean up messages and sensitive contents,
+// and insert system prompt at the beginning of the message queue
+func organizeInputMessageWithoutSensitiveInfo(
+	input []*schema.Message, systemPrompt string) []*schema.Message {
+	// inject intent classification prompt
+	msgs := []*schema.Message{
+		&schema.Message{Role: schema.System, Content: systemPrompt}}
+	// include Tool and Assistant chat history
+	for _, msg := range input {
+		if msg.Role == schema.System {
+			continue // we just ignore system message here
+		} else if strings.HasPrefix(msg.Content, SENSITIVE_PREFIX) {
+			continue // also exclude sensitive information
 		} else {
 			msgs = append(msgs, msg)
 		}

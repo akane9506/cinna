@@ -11,7 +11,7 @@ func (a *AgentCore) AddIntentBranch() {
 	endNodes := map[string]bool{}
 	endNodes[listShoppingItemsLambdaNodeName] = true
 	endNodes[listFeedbackItemsLambdaNodeName] = true
-	endNodes[cinnaChatNodeName] = true
+	endNodes[replyCompressionChainName] = true
 	a.graph.AddBranch(intentLambdaNodeName, compose.NewGraphBranch(intentBranch, endNodes))
 }
 
@@ -25,7 +25,7 @@ func intentBranch(ctx context.Context, out []*schema.Message) (string, error) {
 			case IntentFeedback:
 				next = listFeedbackItemsLambdaNodeName
 			default:
-				next = cinnaChatNodeName
+				next = replyCompressionChainName
 			}
 			return nil
 		})
