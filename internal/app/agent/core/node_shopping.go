@@ -121,7 +121,7 @@ func listShoppingListItems(
 func addShoppingActionBranch(graph Graph) {
 	endNodes := map[string]bool{}
 	endNodes[shoppingTasksPlannerLLMNodeName] = true
-	endNodes[cinnaChatNodeName] = true
+	endNodes[replyCompressionChainName] = true
 	graph.AddBranch(
 		listShoppingItemsLambdaNodeName,
 		compose.NewGraphBranch(shoppingActionBranch, endNodes))
@@ -134,10 +134,8 @@ func shoppingActionBranch(ctx context.Context, out []*schema.Message) (string, e
 			switch state.ActionType {
 			case ActionUpdate:
 				next = shoppingTasksPlannerLLMNodeName
-			case ActionList:
-				next = cinnaChatNodeName
 			default:
-				next = cinnaChatNodeName
+				next = replyCompressionChainName
 			}
 			return nil
 		})

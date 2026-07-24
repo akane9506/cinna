@@ -10,6 +10,7 @@ import (
 
 	"github.com/akane9506/cinna/internal/app"
 	"github.com/akane9506/cinna/internal/utils"
+	"github.com/cloudwego/eino/compose"
 	"github.com/cloudwego/eino/schema"
 	"github.com/stretchr/testify/assert"
 )
@@ -39,15 +40,17 @@ func TestGetDeepseekIsolationOptions(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
 		name  string
-		input []string
+		input []*compose.NodePath
 	}{
 		{
-			name:  "with node names",
-			input: []string{"node_a", "node_b"},
+			name: "with node names",
+			input: []*compose.NodePath{
+				compose.NewNodePath("node_a"),
+				compose.NewNodePath("node_b", "node_c")},
 		},
 		{
 			name:  "empty slice",
-			input: []string{},
+			input: []*compose.NodePath{},
 		},
 	}
 	for _, tt := range tests {
@@ -62,20 +65,22 @@ func TestMonitorLLMInputMessages(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
 		name  string
-		input []string
+		input []*compose.NodePath
 	}{
 		{
-			name:  "with node names",
-			input: []string{"node_a", "node_b"},
+			name: "with node names",
+			input: []*compose.NodePath{
+				compose.NewNodePath("node_a"),
+				compose.NewNodePath("node_a", "node_b")},
 		},
 		{
 			name:  "empty slice",
-			input: []string{"node_a", "node_b"},
+			input: []*compose.NodePath{},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			options := MonitorLLMInputMessages(tt.input)
+			options := MonitorLLMInputMessagesWithPath(tt.input)
 			assert.Equal(t, len(tt.input), len(options))
 		})
 	}

@@ -15,8 +15,6 @@ import (
 )
 
 const (
-	FEEDBACK_DATA_PREFIX = "[DB_FEEDBACKS]"
-
 	listFeedbackItemsLambdaNodeName   = "list_feedback_items"
 	feedbacksUpdatePlannerLLMNodeName = "plan_feedback_updates"
 	updateFeedbackItemsLambdaNodeName = "update_feedback_items"
@@ -94,7 +92,7 @@ func listFeedbackItems(
 	}
 	message := fmt.Sprintf(
 		"%s feedbacks in the current database: [%s]",
-		FEEDBACK_DATA_PREFIX,
+		SENSITIVE_PREFIX,
 		strings.Join(feedbackContents, ", "),
 	)
 	return &schema.Message{
@@ -107,7 +105,7 @@ func listFeedbackItems(
 func addFeedbacksActionBranch(graph Graph) {
 	endNodes := map[string]bool{}
 	endNodes[feedbacksUpdatePlannerLLMNodeName] = true
-	endNodes[cinnaChatNodeName] = true
+	endNodes[replyCompressionChainName] = true
 	graph.AddBranch(listFeedbackItemsLambdaNodeName,
 		compose.NewGraphBranch(feedbacksActionBranch, endNodes))
 }
@@ -121,7 +119,7 @@ func feedbacksActionBranch(
 			case ActionUpdate:
 				next = feedbacksUpdatePlannerLLMNodeName
 			default:
-				next = cinnaChatNodeName
+				next = replyCompressionChainName
 			}
 			return nil
 		})
@@ -187,7 +185,6 @@ func runUpdateFeedbacksCommands(
 				msgs = state.History
 				return nil
 			})
-		msgs = excludeFeedbackData(msgs)
 		if len(newFeedbacks.Items) > 0 {
 			results := executeFeedbacksCommands(
 				ctx, feedbacksRepo, telegramUserID, newFeedbacks, logger)
@@ -245,15 +242,4 @@ func parseFeedbackItems(
 		return &FeedbackItems{Items: []string{}} // return empty object
 	}
 	return &feedbackItems
-}
-
-func excludeFeedbackData(msgs []*schema.Message) []*schema.Message {
-	output := []*schema.Message{}
-	for _, msg := range msgs {
-		if strings.HasPrefix(msg.Content, FEEDBACK_DATA_PREFIX) {
-			continue
-		}
-		output = append(output, msg)
-	}
-	return output
 }

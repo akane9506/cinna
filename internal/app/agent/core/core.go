@@ -72,9 +72,9 @@ func (a *AgentCore) BuildGraph(
 ) (compose.Runnable[*GraphInput, *GraphOutput], error) {
 	a.RegisterInputProcessor()
 	a.RegisterIntentClassifier()
-	a.RegisterCinnaChatNode()
 	a.RegisterShoppingListWorkflow()
 	a.RegisterFeedbacksWorkflow()
+	a.RegisterReplyCompressionChain()
 	a.RegisterOutputProcessor()
 
 	graph := a.graph
@@ -82,10 +82,10 @@ func (a *AgentCore) BuildGraph(
 	graph.AddEdge(processInputLambdaNodeName, intentLLMNodeName)
 	graph.AddEdge(intentLLMNodeName, intentLambdaNodeName)
 	graph.AddEdge(shoppingTasksPlannerLLMNodeName, shoppingTaskRunLambdaNodeName)
-	graph.AddEdge(shoppingTaskRunLambdaNodeName, cinnaChatNodeName)
+	graph.AddEdge(shoppingTaskRunLambdaNodeName, replyCompressionChainName)
 	graph.AddEdge(feedbacksUpdatePlannerLLMNodeName, updateFeedbackItemsLambdaNodeName)
-	graph.AddEdge(updateFeedbackItemsLambdaNodeName, cinnaChatNodeName)
-	graph.AddEdge(cinnaChatNodeName, processOutputLambdaNodeName)
+	graph.AddEdge(updateFeedbackItemsLambdaNodeName, replyCompressionChainName)
+	graph.AddEdge(replyCompressionChainName, processOutputLambdaNodeName)
 	graph.AddEdge(processOutputLambdaNodeName, compose.END)
 	a.AddIntentBranch()
 	a.AddShoppingActionBranch()
@@ -101,15 +101,18 @@ func (a *AgentCore) BuildGraph(
 
 func (a *AgentCore) GetGraphRuntimeOptions(userID int64) []compose.Option {
 	options := []compose.Option{}
-	isolationOptions := GetDeepseekIsolationOptions([]string{
-		intentLLMNodeName,
-		shoppingTasksPlannerLLMNodeName,
-		feedbacksUpdatePlannerLLMNodeName,
-		cinnaChatNodeName,
+	isolationOptions := GetDeepseekIsolationOptions([]*compose.NodePath{
+		compose.NewNodePath(intentLLMNodeName),
+		compose.NewNodePath(shoppingTasksPlannerLLMNodeName),
+		compose.NewNodePath(feedbacksUpdatePlannerLLMNodeName),
+		compose.NewNodePath(replyCompressionChainName, cinnaReplyNodeName),
 	}, userID)
 	options = append(options, isolationOptions...)
 	if a.runtimeEnv == app.RuntimeDev {
-		monitorOptions := MonitorLLMInputMessages([]string{cinnaChatNodeName})
+		nodePaths := []*compose.NodePath{
+			compose.NewNodePath(replyCompressionChainName, cinnaReplyNodeName),
+		}
+		monitorOptions := MonitorLLMInputMessagesWithPath(nodePaths)
 		options = append(options, monitorOptions...)
 	}
 	return options
