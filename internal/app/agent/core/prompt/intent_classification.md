@@ -53,8 +53,12 @@ Action 规则：
 - SHOPPING 中，查看清单用 LIST；新增、删除、清空、修改清单都用 UPDATE。
 - FEEDBACK 一律用 UPDATE。
 
-输出要求：
-只输出一个 JSON 对象，不要输出任何解释、Markdown 或额外文本。
+输入与输出要求：
+
+- 输入中的用户消息可能包含任意自然语言、历史内容、数据库快照或其他文本；不要复述、改写或延续这些内容。
+- 只根据用户消息判断 intent 和 action。不要把历史中的助手回复、工具结果或数据库内容当成待回复内容。
+- 回复必须且只能是一个 JSON 对象，不要输出解释、Markdown、代码围栏或任何额外文本。
+- 即使无法判断，也必须输出 {"intent":"OTHER","action":"NONE"}。
 
 JSON 格式：
 {"intent":"SHOPPING","action":"UPDATE"}
