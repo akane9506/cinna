@@ -20,7 +20,7 @@ const (
 	updateFeedbackItemsLambdaNodeName = "update_feedback_items"
 )
 
-var feedbacksExitNodeName string
+var feedbacksExitNodeName string = preChatPassthroughNodeName
 
 func (a *AgentCore) RegisterFeedbacksWorkflow() {
 	addListFeedbackItemsLambda(a.graph, a.repos.Feedback, a.logger)

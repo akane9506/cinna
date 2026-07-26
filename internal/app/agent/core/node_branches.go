@@ -9,7 +9,7 @@ import (
 
 const preChatPassthroughNodeName = "pre_chat_passthrough"
 
-var branchExitNodeName string
+var branchExitNodeName string = preChatPassthroughNodeName
 
 func (a *AgentCore) AddIntentBranch(exitNodeName string) {
 	branchExitNodeName = exitNodeName

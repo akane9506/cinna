@@ -23,7 +23,7 @@ const (
 	shoppingTaskRunLambdaNodeName   = "execute_shopping_command"
 )
 
-var shoppingExitNodeName string
+var shoppingExitNodeName string = preChatPassthroughNodeName
 
 type UpdateShoppingListCommands struct {
 	Commands []UpdateShoppingListCommand `json:"commands"`
