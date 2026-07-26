@@ -9,9 +9,13 @@ import (
 )
 
 const (
-	replyCompressionChainName = "reply_compression"
-	cinnaReplyNodeName        = "cinna_reply"
-	postProcessLambdaName     = "parallel_post_process"
+	replyCompressionChainName     = "reply_compression"
+	cinnaReplyNodeName            = "cinna_reply"
+	postProcessLambdaName         = "parallel_post_process"
+	replyOnlyBranchName           = "reply_only"
+	replyAndCompressionBranchName = "reply_and_compression"
+
+	COMPRESSION_THRESHOLD = 10 //
 )
 
 type ReplyCompressionChainState struct {
@@ -38,7 +42,7 @@ func (a *AgentCore) RegisterReplyCompressionChain() {
 	a.graph.AddGraphNode(replyCompressionChainName, chain)
 }
 
-// Parallel post processor lambda
+// Post processor lambda
 func appendPostProcessLambda(chain ReplyCompressionChain, logger *slog.Logger) {
 	chain.AppendLambda(
 		compose.InvokableLambda[map[string]any, *schema.Message](

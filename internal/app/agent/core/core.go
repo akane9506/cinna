@@ -74,6 +74,7 @@ func (a *AgentCore) BuildGraph(
 	a.RegisterIntentClassifier()
 	a.RegisterShoppingListWorkflow()
 	a.RegisterFeedbacksWorkflow()
+	a.RegisterPreChatPassthroughNode()
 	a.RegisterReplyCompressionChain()
 	a.RegisterOutputProcessor()
 
@@ -82,14 +83,16 @@ func (a *AgentCore) BuildGraph(
 	graph.AddEdge(processInputLambdaNodeName, intentLLMNodeName)
 	graph.AddEdge(intentLLMNodeName, intentLambdaNodeName)
 	graph.AddEdge(shoppingTasksPlannerLLMNodeName, shoppingTaskRunLambdaNodeName)
-	graph.AddEdge(shoppingTaskRunLambdaNodeName, replyCompressionChainName)
+	graph.AddEdge(shoppingTaskRunLambdaNodeName, preChatPassthroughNodeName)
 	graph.AddEdge(feedbacksUpdatePlannerLLMNodeName, updateFeedbackItemsLambdaNodeName)
-	graph.AddEdge(updateFeedbackItemsLambdaNodeName, replyCompressionChainName)
+	graph.AddEdge(updateFeedbackItemsLambdaNodeName, preChatPassthroughNodeName)
+	graph.AddEdge(preChatPassthroughNodeName, replyCompressionChainName)
 	graph.AddEdge(replyCompressionChainName, processOutputLambdaNodeName)
 	graph.AddEdge(processOutputLambdaNodeName, compose.END)
-	a.AddIntentBranch()
-	a.AddShoppingActionBranch()
-	a.AddFeedbacksActionBranch()
+
+	a.AddIntentBranch(preChatPassthroughNodeName)
+	a.AddShoppingActionBranch(preChatPassthroughNodeName)
+	a.AddFeedbacksActionBranch(preChatPassthroughNodeName)
 	runnable, err := graph.Compile(ctx)
 
 	if err != nil {

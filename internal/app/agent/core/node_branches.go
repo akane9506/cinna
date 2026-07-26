@@ -7,12 +7,21 @@ import (
 	"github.com/cloudwego/eino/schema"
 )
 
-func (a *AgentCore) AddIntentBranch() {
+const preChatPassthroughNodeName = "pre_chat_passthrough"
+
+var branchExitNodeName string
+
+func (a *AgentCore) AddIntentBranch(exitNodeName string) {
+	branchExitNodeName = exitNodeName
 	endNodes := map[string]bool{}
 	endNodes[listShoppingItemsLambdaNodeName] = true
 	endNodes[listFeedbackItemsLambdaNodeName] = true
-	endNodes[replyCompressionChainName] = true
+	endNodes[branchExitNodeName] = true
 	a.graph.AddBranch(intentLambdaNodeName, compose.NewGraphBranch(intentBranch, endNodes))
+}
+
+func (a *AgentCore) RegisterPreChatPassthroughNode() {
+	a.graph.AddPassthroughNode(preChatPassthroughNodeName)
 }
 
 func intentBranch(ctx context.Context, out []*schema.Message) (string, error) {
@@ -25,7 +34,7 @@ func intentBranch(ctx context.Context, out []*schema.Message) (string, error) {
 			case IntentFeedback:
 				next = listFeedbackItemsLambdaNodeName
 			default:
-				next = replyCompressionChainName
+				next = branchExitNodeName
 			}
 			return nil
 		})
