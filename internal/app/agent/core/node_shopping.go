@@ -23,6 +23,8 @@ const (
 	shoppingTaskRunLambdaNodeName   = "execute_shopping_command"
 )
 
+var shoppingExitNodeName string = preChatPassthroughNodeName
+
 type UpdateShoppingListCommands struct {
 	Commands []UpdateShoppingListCommand `json:"commands"`
 }
@@ -40,7 +42,8 @@ func (a *AgentCore) RegisterShoppingListWorkflow() {
 	addRunShoppingTaskLambdaNode(a.graph, a.repos.ShoppingList, a.logger)
 }
 
-func (a *AgentCore) AddShoppingActionBranch() {
+func (a *AgentCore) AddShoppingActionBranch(exitNodeName string) {
+	shoppingExitNodeName = exitNodeName
 	addShoppingActionBranch(a.graph)
 }
 
@@ -121,7 +124,7 @@ func listShoppingListItems(
 func addShoppingActionBranch(graph Graph) {
 	endNodes := map[string]bool{}
 	endNodes[shoppingTasksPlannerLLMNodeName] = true
-	endNodes[replyCompressionChainName] = true
+	endNodes[shoppingExitNodeName] = true
 	graph.AddBranch(
 		listShoppingItemsLambdaNodeName,
 		compose.NewGraphBranch(shoppingActionBranch, endNodes))
@@ -135,7 +138,7 @@ func shoppingActionBranch(ctx context.Context, out []*schema.Message) (string, e
 			case ActionUpdate:
 				next = shoppingTasksPlannerLLMNodeName
 			default:
-				next = replyCompressionChainName
+				next = shoppingExitNodeName
 			}
 			return nil
 		})

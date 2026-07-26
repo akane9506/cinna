@@ -48,7 +48,7 @@ func setupMockGraph(ctx context.Context) (compose.Runnable[Intent, string], erro
 	addInputLambdaNode(inputLambdaName)
 	addResultNode(listShoppingItemsLambdaNodeName)
 	addResultNode(listFeedbackItemsLambdaNodeName)
-	addResultNode(replyCompressionChainName)
+	addResultNode(preChatPassthroughNodeName)
 
 	graph.AddEdge(compose.START, inputLambdaName)
 	graph.AddBranch(
@@ -58,13 +58,13 @@ func setupMockGraph(ctx context.Context) (compose.Runnable[Intent, string], erro
 			map[string]bool{
 				listShoppingItemsLambdaNodeName: true,
 				listFeedbackItemsLambdaNodeName: true,
-				replyCompressionChainName:       true,
+				preChatPassthroughNodeName:      true,
 			},
 		),
 	)
 	graph.AddEdge(listFeedbackItemsLambdaNodeName, compose.END)
 	graph.AddEdge(listShoppingItemsLambdaNodeName, compose.END)
-	graph.AddEdge(replyCompressionChainName, compose.END)
+	graph.AddEdge(preChatPassthroughNodeName, compose.END)
 	runnable, err := graph.Compile(ctx)
 	return runnable, err
 }
@@ -92,12 +92,12 @@ func TestIntentBranch(t *testing.T) {
 		{
 			name:           string(IntentOther),
 			intent:         IntentOther,
-			expectedBranch: replyCompressionChainName,
+			expectedBranch: preChatPassthroughNodeName,
 		},
 		{
 			name:           "invalid intent",
 			intent:         Intent("invalid"),
-			expectedBranch: replyCompressionChainName,
+			expectedBranch: preChatPassthroughNodeName,
 		},
 	}
 	for _, tt := range tests {

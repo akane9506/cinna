@@ -20,13 +20,16 @@ const (
 	updateFeedbackItemsLambdaNodeName = "update_feedback_items"
 )
 
+var feedbacksExitNodeName string = preChatPassthroughNodeName
+
 func (a *AgentCore) RegisterFeedbacksWorkflow() {
 	addListFeedbackItemsLambda(a.graph, a.repos.Feedback, a.logger)
 	addFeedbacksPlanningNode(a.graph, a.jsonModel, a.prompts.FeedbacksPlanner)
 	addUpdateFeedbacksLambdaNode(a.graph, a.repos.Feedback, a.logger)
 }
 
-func (a *AgentCore) AddFeedbacksActionBranch() {
+func (a *AgentCore) AddFeedbacksActionBranch(exitNodeName string) {
+	feedbacksExitNodeName = exitNodeName
 	addFeedbacksActionBranch(a.graph)
 }
 
@@ -105,7 +108,7 @@ func listFeedbackItems(
 func addFeedbacksActionBranch(graph Graph) {
 	endNodes := map[string]bool{}
 	endNodes[feedbacksUpdatePlannerLLMNodeName] = true
-	endNodes[replyCompressionChainName] = true
+	endNodes[feedbacksExitNodeName] = true
 	graph.AddBranch(listFeedbackItemsLambdaNodeName,
 		compose.NewGraphBranch(feedbacksActionBranch, endNodes))
 }
@@ -119,7 +122,7 @@ func feedbacksActionBranch(
 			case ActionUpdate:
 				next = feedbacksUpdatePlannerLLMNodeName
 			default:
-				next = replyCompressionChainName
+				next = feedbacksExitNodeName
 			}
 			return nil
 		})
