@@ -161,3 +161,32 @@ func cleanupOutputMessage(output []*schema.Message) []*schema.Message {
 	}
 	return msgs
 }
+
+func organizeCompressionMessage(
+	input []*schema.Message,
+	prompt string,
+) []*schema.Message {
+	var history strings.Builder
+	for _, msg := range input {
+		if msg.Role == schema.System {
+			continue
+		}
+		if strings.HasPrefix(msg.Content, SENSITIVE_PREFIX) {
+			continue
+		}
+		switch msg.Role {
+		case schema.User:
+			history.WriteString("[USER]\n")
+		case schema.Assistant:
+			history.WriteString("[ASSISTANT]\n")
+		default:
+			continue
+		}
+		history.WriteString(msg.Content)
+		history.WriteString("\n\n")
+	}
+	return []*schema.Message{
+		schema.SystemMessage(prompt),
+		schema.UserMessage(history.String()),
+	}
+}

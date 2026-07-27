@@ -94,7 +94,10 @@ func (m *Models) CreateDeepseekFlashJSONModel(ctx context.Context) (*deepseek.Ch
 func GetDeepseekIsolationOptions(nodePaths []*compose.NodePath, telegramUserID int64) []compose.Option {
 	opts := []compose.Option{}
 	for _, path := range nodePaths {
-		isolationID := fmt.Sprintf("cinna:%d:node:%s", telegramUserID, path)
+		isolationID := fmt.Sprintf(
+			"%d_node_%s",
+			telegramUserID,
+			strings.Join(path.GetPath(), "_"))
 		opt := compose.WithChatModelOption(deepseek.WithExtraFields(map[string]interface{}{
 			"user_id": isolationID,
 		})).DesignateNodeWithPath(path)

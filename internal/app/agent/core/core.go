@@ -75,7 +75,8 @@ func (a *AgentCore) BuildGraph(
 	a.RegisterShoppingListWorkflow()
 	a.RegisterFeedbacksWorkflow()
 	a.RegisterPreChatPassthroughNode()
-	a.RegisterReplyCompressionChain()
+	a.RegisterReplyCompressionChain(false) // reply only chain
+	a.RegisterReplyCompressionChain(true)  // reply and compression chain
 	a.RegisterOutputProcessor()
 
 	graph := a.graph
@@ -86,13 +87,14 @@ func (a *AgentCore) BuildGraph(
 	graph.AddEdge(shoppingTaskRunLambdaNodeName, preChatPassthroughNodeName)
 	graph.AddEdge(feedbacksUpdatePlannerLLMNodeName, updateFeedbackItemsLambdaNodeName)
 	graph.AddEdge(updateFeedbackItemsLambdaNodeName, preChatPassthroughNodeName)
-	graph.AddEdge(preChatPassthroughNodeName, replyCompressionChainName)
 	graph.AddEdge(replyCompressionChainName, processOutputLambdaNodeName)
+	graph.AddEdge(replyOnlyChainName, processOutputLambdaNodeName)
 	graph.AddEdge(processOutputLambdaNodeName, compose.END)
 
 	a.AddIntentBranch(preChatPassthroughNodeName)
 	a.AddShoppingActionBranch(preChatPassthroughNodeName)
 	a.AddFeedbacksActionBranch(preChatPassthroughNodeName)
+	a.AddReplyCompressionBranch()
 	runnable, err := graph.Compile(ctx)
 
 	if err != nil {
@@ -109,11 +111,15 @@ func (a *AgentCore) GetGraphRuntimeOptions(userID int64) []compose.Option {
 		compose.NewNodePath(shoppingTasksPlannerLLMNodeName),
 		compose.NewNodePath(feedbacksUpdatePlannerLLMNodeName),
 		compose.NewNodePath(replyCompressionChainName, cinnaReplyNodeName),
+		compose.NewNodePath(replyCompressionChainName, compressionNodeName),
+		compose.NewNodePath(replyOnlyChainName, cinnaReplyNodeName),
 	}, userID)
 	options = append(options, isolationOptions...)
 	if a.runtimeEnv == app.RuntimeDev {
 		nodePaths := []*compose.NodePath{
-			compose.NewNodePath(replyCompressionChainName, cinnaReplyNodeName),
+			// compose.NewNodePath(replyOnlyChainName, cinnaReplyNodeName),
+			// compose.NewNodePath(replyCompressionChainName, cinnaReplyNodeName),
+			compose.NewNodePath(replyCompressionChainName, compressionNodeName),
 		}
 		monitorOptions := MonitorLLMInputMessagesWithPath(nodePaths)
 		options = append(options, monitorOptions...)
