@@ -9,24 +9,26 @@ import (
 )
 
 const (
-	replyCompressionChainName     = "reply_compression"
-	cinnaReplyNodeName            = "cinna_reply"
-	postProcessLambdaName         = "parallel_post_process"
-	replyOnlyBranchName           = "reply_only"
-	replyAndCompressionBranchName = "reply_and_compression"
-
-	COMPRESSION_THRESHOLD = 10 //
+	replyOnlyChainName        = "reply_only_chain"
+	replyCompressionChainName = "reply_compression_chain"
+	cinnaReplyNodeName        = "cinna_reply"
+	compressionNodeName       = "memory_compression"
+	postProcessLambdaName     = "parallel_post_process"
 )
 
 type ReplyCompressionChainState struct {
-	// History     []*schema.Message
 	Compression bool
-	// Summary     string
+}
+
+type ReplyCompressionOutput struct {
+	Compression bool
+	Reply       *schema.Message
+	Memory      *schema.Message
 }
 
 type ReplyCompressionChain = *compose.Chain[[]*schema.Message, *schema.Message]
 
-func (a *AgentCore) RegisterReplyCompressionChain() {
+func (a *AgentCore) RegisterReplyCompressionChain(includeCompression bool) {
 	chain := compose.NewChain[[]*schema.Message, *schema.Message](
 		compose.WithGenLocalState(
 			func(ctx context.Context) (state *ReplyCompressionChainState) {
@@ -36,23 +38,29 @@ func (a *AgentCore) RegisterReplyCompressionChain() {
 			},
 		),
 	)
-	// appendCinnaChatNode(chain, a.chatModel, a.prompts.CinnaPersona)
-	appendParallelNode(chain, a.chatModel, a.prompts.CinnaPersona)
-	appendPostProcessLambda(chain, a.logger)
-	a.graph.AddGraphNode(replyCompressionChainName, chain)
+	nodeName := replyCompressionChainName
+	if !includeCompression {
+		appendReplyOnlyParallelNode(chain, a.chatModel, a.prompts.CinnaPersona)
+		nodeName = replyOnlyChainName
+	} else {
+		appendReplyCompressionParallelNode(chain,
+			a.chatModel, a.prompts.CinnaPersona, a.prompts.MemoryCompression)
+	}
+	appendPostProcessLambda(chain, a.logger, includeCompression)
+	a.graph.AddGraphNode(nodeName, chain)
 }
 
 // Post processor lambda
-func appendPostProcessLambda(chain ReplyCompressionChain, logger *slog.Logger) {
+func appendPostProcessLambda(chain ReplyCompressionChain, logger *slog.Logger, includeCompression bool) {
 	chain.AppendLambda(
 		compose.InvokableLambda[map[string]any, *schema.Message](
-			processParallelResult(logger),
+			processParallelResult(logger, includeCompression),
 		),
 		compose.WithNodeKey(postProcessLambdaName),
 	)
 }
 
-func processParallelResult(nodeLogger *slog.Logger) compose.InvokeWOOpt[map[string]any, *schema.Message] {
+func processParallelResult(nodeLogger *slog.Logger, includeCompression bool) compose.InvokeWOOpt[map[string]any, *schema.Message] {
 	return func(ctx context.Context, input map[string]any) (*schema.Message, error) {
 		logger := nodeLogger.With("Node", postProcessLambdaName)
 		chatResult, ok := input[cinnaReplyNodeName].(*schema.Message)
@@ -62,24 +70,65 @@ func processParallelResult(nodeLogger *slog.Logger) compose.InvokeWOOpt[map[stri
 				Role:    schema.Assistant,
 				Content: "chat node failed (this message needs to be optimized)"}, nil
 		}
+		if includeCompression {
+			compressionResult, ok := input[compressionNodeName].(*schema.Message)
+			if !ok || compressionResult == nil {
+				logger.Error("failed to get compression result: key does not exist", "key", compressionNodeName)
+			} else {
+				// keep this one for the production test
+				logger.Info("memory compression", "content", compressionResult.Content)
+			}
+		}
 		return chatResult, nil
 	}
 }
 
-// Parallel node
+// Parallel node without compression
 // in: []*schema.Message | out: map[string]any
-func appendParallelNode(chain ReplyCompressionChain, chatModel ChatModel, chatPrompt string) {
+func appendReplyOnlyParallelNode(chain ReplyCompressionChain, chatModel ChatModel, chatPrompt string) {
 	parallel := compose.NewParallel()
 	parallel.AddChatModel(
 		cinnaReplyNodeName,
 		chatModel,
 		compose.WithNodeKey(cinnaReplyNodeName),
-		compose.WithStatePreHandler(prepareForChat(chatPrompt)))
+		compose.WithStatePreHandler(prepareForReply(chatPrompt)))
 	parallel.AddPassthrough("empty")
 	chain.AppendParallel(parallel)
 }
 
-func prepareForChat(prompt string,
+// Parallel node with compression
+// in: []*schema.Message | out: map[string]any
+func appendReplyCompressionParallelNode(
+	chain ReplyCompressionChain,
+	chatModel ChatModel,
+	replyPrompt string, compressionPrompt string) {
+	parallel := compose.NewParallel()
+	parallel.AddChatModel(
+		cinnaReplyNodeName,
+		chatModel,
+		compose.WithNodeKey(cinnaReplyNodeName),
+		compose.WithStatePreHandler(prepareForReply(replyPrompt)))
+	parallel.AddChatModel(
+		compressionNodeName,
+		chatModel,
+		compose.WithNodeKey(compressionNodeName),
+		compose.WithStatePreHandler(prepareForCompression(compressionPrompt)),
+	)
+	chain.AppendParallel(parallel)
+}
+
+func prepareForCompression(prompt string,
+) compose.StatePreHandler[[]*schema.Message, *ReplyCompressionChainState] {
+	return func(ctx context.Context,
+		input []*schema.Message,
+		state *ReplyCompressionChainState) ([]*schema.Message, error) {
+		state.Compression = true
+		msgs := organizeCompressionMessage(input, prompt)
+		return msgs, nil
+	}
+}
+
+func prepareForReply(prompt string,
 ) compose.StatePreHandler[[]*schema.Message, *ReplyCompressionChainState] {
 	return func(ctx context.Context,
 		input []*schema.Message,

@@ -9,6 +9,8 @@ import (
 
 const preChatPassthroughNodeName = "pre_chat_passthrough"
 
+const COMPRESSION_THRESHOLD = 30
+
 var branchExitNodeName string = preChatPassthroughNodeName
 
 func (a *AgentCore) AddIntentBranch(exitNodeName string) {
@@ -24,7 +26,14 @@ func (a *AgentCore) RegisterPreChatPassthroughNode() {
 	a.graph.AddPassthroughNode(preChatPassthroughNodeName)
 }
 
-func intentBranch(ctx context.Context, out []*schema.Message) (string, error) {
+func (a *AgentCore) AddReplyCompressionBranch() {
+	endNodes := map[string]bool{}
+	endNodes[replyOnlyChainName] = true
+	endNodes[replyCompressionChainName] = true
+	a.graph.AddBranch(preChatPassthroughNodeName, compose.NewGraphBranch(replyCompressionBranch, endNodes))
+}
+
+func intentBranch(ctx context.Context, in []*schema.Message) (string, error) {
 	var next string
 	compose.ProcessState[*AgentState](
 		ctx, func(ctx context.Context, state *AgentState) error {
@@ -39,4 +48,11 @@ func intentBranch(ctx context.Context, out []*schema.Message) (string, error) {
 			return nil
 		})
 	return next, nil
+}
+
+func replyCompressionBranch(ctx context.Context, in []*schema.Message) (string, error) {
+	if len(in) > 10 {
+		return replyCompressionChainName, nil
+	}
+	return replyOnlyChainName, nil
 }
