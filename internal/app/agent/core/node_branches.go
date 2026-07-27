@@ -51,7 +51,7 @@ func intentBranch(ctx context.Context, in []*schema.Message) (string, error) {
 }
 
 func replyCompressionBranch(ctx context.Context, in []*schema.Message) (string, error) {
-	if len(in) > 10 {
+	if len(in) > COMPRESSION_THRESHOLD {
 		return replyCompressionChainName, nil
 	}
 	return replyOnlyChainName, nil
