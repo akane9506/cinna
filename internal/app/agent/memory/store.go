@@ -86,9 +86,9 @@ func (m *MemoryStore) UpdateChatHistory(ctx context.Context, userID int64, msgs 
 }
 
 func (m *MemoryStore) ReplaceChatHistory(
-	ctx context.Context, userID int64, msgs []*schema.Message) {
+	ctx context.Context, userID int64, msgs []*schema.Message) error {
 	if msgs == nil || len(msgs) == 0 {
-		return
+		return fmt.Errorf("empty message received")
 	}
 	userState := m.getUserState(userID)
 	userState.mu.Lock()
@@ -113,10 +113,11 @@ func (m *MemoryStore) ReplaceChatHistory(
 		m.logger.Error(
 			"failed to replace agent memory",
 			"error", err)
-		return
+		return err
 	}
 	userState.history = history
 	userState.buffer = []schema.Message{}
+	return nil
 }
 
 func (m *MemoryStore) Get(ctx context.Context, userID int64) []*schema.Message {

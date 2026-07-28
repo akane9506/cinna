@@ -37,7 +37,11 @@ func (a *CinnaReactAgent) HandleText(
 	}
 	if result.Compression {
 		newMemory := []*schema.Message{result.Memory, result.OutputMessage}
-		a.store.ReplaceChatHistory(ctx, userID, newMemory)
+		err := a.store.ReplaceChatHistory(ctx, userID, newMemory)
+		// if memory replace failed, proceed to save the current chat history
+		if err != nil {
+			a.store.UpdateChatHistory(ctx, userID, result.ChatHistory)
+		}
 	} else {
 		a.store.UpdateChatHistory(ctx, userID, result.ChatHistory)
 	}
