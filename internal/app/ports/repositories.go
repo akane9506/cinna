@@ -55,11 +55,10 @@ type AgentMemoryRepository interface {
 		params sqlc.AppendAgentMemoryBatchParams,
 	) ([]sqlc.AgentMemory, error)
 
-	PruneAgentMemory(
+	ReplaceAgentMemory(
 		ctx context.Context,
-		telegramUserID int64,
-		keepCount int32,
-	) error
+		params sqlc.ReplaceAgentMemoryParams,
+	) ([]sqlc.AgentMemory, error)
 }
 
 type FeedbacksRepository interface {

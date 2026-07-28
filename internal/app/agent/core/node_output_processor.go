@@ -17,25 +17,29 @@ func (a *AgentCore) RegisterOutputProcessor() {
 }
 
 // ProcessOutputLambdaNode
-// in: *schema.Message | out: *TaskOutput
+// in: *schema.Message | out: *GraphOutput
 func addProcessOutputLambdaNode(graph Graph) {
 	graph.AddLambdaNode(
 		processOutputLambdaNodeName,
-		compose.InvokableLambda[*schema.Message, *GraphOutput](processTaskOutput),
+		compose.InvokableLambda[*ReplyCompressionOutput, *GraphOutput](processTaskOutput),
 	)
 }
 
 func processTaskOutput(
-	ctx context.Context, input *schema.Message) (*GraphOutput, error) {
+	ctx context.Context, input *ReplyCompressionOutput) (*GraphOutput, error) {
 	output := &GraphOutput{}
-	output.OutputMessage = input
+	output.OutputMessage = input.Reply
 	compose.ProcessState[*AgentState](
 		ctx, func(ctx context.Context, state *AgentState) error {
 			history := cleanupOutputMessage(state.History)
 			output.ChatHistory = make([]*schema.Message, 0, len(history)+1)
 			output.ChatHistory = append(output.ChatHistory, history...)
-			output.ChatHistory = append(output.ChatHistory, input)
+			output.ChatHistory = append(output.ChatHistory, input.Reply)
 			return nil
 		})
+	if input.Compression {
+		output.Compression = true
+		output.Memory = input.Memory
+	}
 	return output, nil
 }

@@ -15,9 +15,6 @@ const (
 	// number of history messages for conversation,  including assistant and user msg, should be enough
 	defaultMaxChatLength = 50
 
-	// number of history stored in the database
-	defaultMaxDBLength = 500
-
 	// flush buffer to the history db when buffer size equals or higher than this threshold
 	defaultFlushBufferThreshold = 2 // we can increase this when having a constant-running instance
 )
@@ -25,7 +22,6 @@ const (
 type MemoryStore struct {
 	mu                   sync.RWMutex // protects the user map only
 	maxChatLength        int
-	maxDBLength          int
 	flushBufferThreshold int
 
 	users       map[int64]*userState
@@ -48,7 +44,6 @@ func NewMemoryStore(agentMemoryRepo ports.AgentMemoryRepository, logger *slog.Lo
 	store := &MemoryStore{
 		users:                map[int64]*userState{},
 		maxChatLength:        defaultMaxChatLength,
-		maxDBLength:          defaultMaxDBLength,
 		flushBufferThreshold: defaultFlushBufferThreshold,
 		agentMemory:          agentMemoryRepo,
 		logger:               logger,
@@ -88,6 +83,40 @@ func (m *MemoryStore) UpdateChatHistory(ctx context.Context, userID int64, msgs 
 			)
 		}
 	}
+}
+
+func (m *MemoryStore) ReplaceChatHistory(
+	ctx context.Context, userID int64, msgs []*schema.Message) {
+	if msgs == nil || len(msgs) == 0 {
+		return
+	}
+	userState := m.getUserState(userID)
+	userState.mu.Lock()
+	defer userState.mu.Unlock()
+	history := []schema.Message{}
+	roles := []string{}
+	contents := []string{}
+	for _, msg := range msgs {
+		// currently let's allow the memory to grow. The new history compression method
+		// will be proposed in the next step
+		history = append(history, *msg)
+		roles = append(roles, string(msg.Role))
+		contents = append(contents, msg.Content)
+	}
+	replaceAgentMemoryParams := sqlc.ReplaceAgentMemoryParams{
+		TelegramUserID: userID,
+		Roles:          roles,
+		Contents:       contents,
+	}
+	_, err := m.agentMemory.ReplaceAgentMemory(ctx, replaceAgentMemoryParams)
+	if err != nil {
+		m.logger.Error(
+			"failed to replace agent memory",
+			"error", err)
+		return
+	}
+	userState.history = history
+	userState.buffer = []schema.Message{}
 }
 
 func (m *MemoryStore) Get(ctx context.Context, userID int64) []*schema.Message {
@@ -157,11 +186,6 @@ func (m *MemoryStore) flushBuffer(ctx context.Context, userID int64, userState *
 	}
 	// if flush succeeded, clear the buffer
 	userState.buffer = []schema.Message{}
-	// and prune the agent memory size
-	err = m.agentMemory.PruneAgentMemory(ctx, userID, int32(m.maxDBLength))
-	if err != nil {
-		return fmt.Errorf("failed to prune history: %w", err)
-	}
 	return nil
 }
 

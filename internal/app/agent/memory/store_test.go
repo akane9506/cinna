@@ -45,6 +45,14 @@ func (m *mockAgentMemoryRepo) PruneAgentMemory(
 	return args.Error(0)
 }
 
+func (m *mockAgentMemoryRepo) ReplaceAgentMemory(
+	ctx context.Context,
+	params sqlc.ReplaceAgentMemoryParams,
+) ([]sqlc.AgentMemory, error) {
+	args := m.Called(ctx, params)
+	return args.Get(0).([]sqlc.AgentMemory), args.Error(1)
+}
+
 func TestShouldFlushBuffer(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -113,17 +121,17 @@ func TestFlushBuffer(t *testing.T) {
 			inputContents:      []string{"user", "assistant"},
 			expectedFlushError: errors.New("failed to flush"),
 		},
-		{
-			name: "error prune db",
-			buffer: []schema.Message{
-				schema.Message{Role: schema.User, Content: "user"},
-				schema.Message{Role: schema.Assistant, Content: "assistant"},
-			},
-			inputRoles:         []string{string(schema.User), string(schema.Assistant)},
-			inputContents:      []string{"user", "assistant"},
-			expectedFlushError: nil,
-			expectedPruneError: errors.New("failed to prune"),
-		},
+		// {
+		// 	name: "error prune db",
+		// 	buffer: []schema.Message{
+		// 		schema.Message{Role: schema.User, Content: "user"},
+		// 		schema.Message{Role: schema.Assistant, Content: "assistant"},
+		// 	},
+		// 	inputRoles:         []string{string(schema.User), string(schema.Assistant)},
+		// 	inputContents:      []string{"user", "assistant"},
+		// 	expectedFlushError: nil,
+		// 	expectedPruneError: errors.New("failed to prune"),
+		// },
 	}
 
 	for _, tt := range tests {

@@ -15,8 +15,10 @@ type GraphInput struct {
 }
 
 type GraphOutput struct {
+	Compression   bool
 	OutputMessage *schema.Message
 	ChatHistory   []*schema.Message
+	Memory        *schema.Message
 }
 
 // For intent classification
