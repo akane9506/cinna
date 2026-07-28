@@ -35,6 +35,15 @@ func (a *CinnaReactAgent) HandleText(
 		logger.Error("failed to get cinna response", "user_id", userID, "error", err)
 		return "", err
 	}
-	a.store.UpdateChatHistory(ctx, userID, result.ChatHistory)
+	if result.Compression {
+		newMemory := []*schema.Message{result.Memory, result.OutputMessage}
+		err := a.store.ReplaceChatHistory(ctx, userID, newMemory)
+		// if memory replace failed, proceed to save the current chat history
+		if err != nil {
+			a.store.UpdateChatHistory(ctx, userID, result.ChatHistory)
+		}
+	} else {
+		a.store.UpdateChatHistory(ctx, userID, result.ChatHistory)
+	}
 	return result.OutputMessage.Content, nil
 }

@@ -9,7 +9,7 @@ import (
 
 const preChatPassthroughNodeName = "pre_chat_passthrough"
 
-const COMPRESSION_THRESHOLD = 30
+const COMPRESSION_THRESHOLD = 50
 
 var branchExitNodeName string = preChatPassthroughNodeName
 

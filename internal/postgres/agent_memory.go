@@ -50,29 +50,38 @@ func (a *AgentMemoryRepository) AppendAgentMemoryBatch(
 	ctx context.Context,
 	params sqlc.AppendAgentMemoryBatchParams,
 ) ([]sqlc.AgentMemory, error) {
-	encryptedParams := a.encryptMessages(&params)
-	return a.queries.AppendAgentMemoryBatch(ctx, *encryptedParams)
+	validContents, validRoles := a.encryptMessages(
+		params.TelegramUserID, params.Contents, params.Roles)
+	encryptedParams := sqlc.AppendAgentMemoryBatchParams{
+		TelegramUserID: params.TelegramUserID,
+		Contents:       validContents,
+		Roles:          validRoles,
+	}
+	return a.queries.AppendAgentMemoryBatch(ctx, encryptedParams)
 }
 
-func (a *AgentMemoryRepository) PruneAgentMemory(
+func (a *AgentMemoryRepository) ReplaceAgentMemory(
 	ctx context.Context,
-	telegramUserID int64,
-	keepCount int32,
-) error {
-	return a.queries.PruneAgentMemory(
-		ctx,
-		sqlc.PruneAgentMemoryParams{
-			TelegramUserID: telegramUserID,
-			KeepCount:      keepCount,
-		})
+	params sqlc.ReplaceAgentMemoryParams,
+) ([]sqlc.AgentMemory, error) {
+	validContents, validRoles := a.encryptMessages(
+		params.TelegramUserID, params.Contents, params.Roles)
+	encryptedParams := sqlc.ReplaceAgentMemoryParams{
+		TelegramUserID: params.TelegramUserID,
+		Contents:       validContents,
+		Roles:          validRoles,
+	}
+	return a.queries.ReplaceAgentMemory(ctx, encryptedParams)
 }
 
-func (a *AgentMemoryRepository) encryptMessages(params *sqlc.AppendAgentMemoryBatchParams) *sqlc.AppendAgentMemoryBatchParams {
+func (a *AgentMemoryRepository) encryptMessages(
+	telegramUserID int64,
+	contents []string,
+	roles []string) ([]string, []string) {
 	logger := a.logger.With("path", "internal/postgres/agent_memory/encryptMessages")
-	telegramUserID := params.TelegramUserID
 	validRoles := []string{}
 	validContents := []string{}
-	for idx, content := range params.Contents {
+	for idx, content := range contents {
 		encryptedMessage, err := a.messageCipher.Encrypt(telegramUserID, content)
 		if err != nil {
 			// we don't break the progress when encryption failed, therefore we log errors without returning them
@@ -80,11 +89,9 @@ func (a *AgentMemoryRepository) encryptMessages(params *sqlc.AppendAgentMemoryBa
 			continue
 		}
 		validContents = append(validContents, encryptedMessage)
-		validRoles = append(validRoles, params.Roles[idx])
+		validRoles = append(validRoles, roles[idx])
 	}
-	params.Contents = validContents
-	params.Roles = validRoles
-	return params
+	return validContents, validRoles
 }
 
 func (a *AgentMemoryRepository) decryptMessages(memory []sqlc.AgentMemory) []sqlc.AgentMemory {

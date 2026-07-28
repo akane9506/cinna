@@ -117,9 +117,8 @@ func (a *AgentCore) GetGraphRuntimeOptions(userID int64) []compose.Option {
 	options = append(options, isolationOptions...)
 	if a.runtimeEnv == app.RuntimeDev {
 		nodePaths := []*compose.NodePath{
-			// compose.NewNodePath(replyOnlyChainName, cinnaReplyNodeName),
-			// compose.NewNodePath(replyCompressionChainName, cinnaReplyNodeName),
-			compose.NewNodePath(replyCompressionChainName, compressionNodeName),
+			compose.NewNodePath(replyCompressionChainName, cinnaReplyNodeName),
+			compose.NewNodePath(replyOnlyChainName, cinnaReplyNodeName),
 		}
 		monitorOptions := MonitorLLMInputMessagesWithPath(nodePaths)
 		options = append(options, monitorOptions...)
