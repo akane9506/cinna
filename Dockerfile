@@ -21,7 +21,7 @@ RUN sqlc generate && \
 # ---------- Runtime stage ----------
 FROM alpine:latest
 
-RUN apk add --no-cache ca-certificates
+RUN apk add --no-cache ca-certificates tzdata
 
 COPY --from=builder /out/cinna /cinna
 
