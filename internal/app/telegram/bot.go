@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/akane9506/cinna/internal/app/ports"
 	"github.com/go-telegram/bot"
@@ -13,6 +14,7 @@ type AgentHandler interface {
 	HandleText(
 		ctx context.Context,
 		userID int64,
+		messageTime time.Time,
 		text string,
 	) (string, error)
 }
@@ -23,6 +25,7 @@ type Client struct {
 	agentHandler  AgentHandler
 	webhookURL    string
 	webhookSecret string
+	timezone      string
 	logger        *slog.Logger
 }
 
@@ -33,6 +36,7 @@ func NewClient(
 	agentHandler AgentHandler,
 	webhookURL string,
 	webhookSecret string,
+	timezone string,
 	logger *slog.Logger,
 ) (*Client, error) {
 	if logger == nil {
@@ -45,6 +49,7 @@ func NewClient(
 		webhookURL:    webhookURL,
 		webhookSecret: webhookSecret,
 		agentHandler:  agentHandler,
+		timezone:      timezone,
 	}
 
 	opts := []bot.Option{

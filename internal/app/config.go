@@ -5,6 +5,7 @@ import (
 	"os"
 	"slices"
 	"strings"
+	"time"
 )
 
 const (
@@ -18,6 +19,8 @@ const (
 	// Encryption key
 	messageEncryptionKeyIDEnv = "MESSAGE_ENCRYPTION_KEY_ID"
 	messageEncryptionKeyEnv   = "MESSAGE_ENCRYPTION_KEY"
+	// Timezone information
+	appTimezoneEnv = "APP_TIMEZONE"
 )
 
 const (
@@ -34,6 +37,7 @@ type Config struct {
 	DeepseekAPIKey         string
 	MessageEncryptionKeyID string
 	MessageEncryptionKey   string
+	AppTimezone            string
 }
 
 func LoadConfig() (*Config, error) {
@@ -94,5 +98,15 @@ func LoadConfig() (*Config, error) {
 	config.MessageEncryptionKeyID = messageEncryptionKeyID
 	config.MessageEncryptionKey = messageEncryptionKey
 
+	// setup timezone
+	appTimezone := strings.TrimSpace(os.Getenv(appTimezoneEnv))
+	if appTimezone == "" {
+		return nil, fmt.Errorf("Invalid Timezone: %s", appTimezone)
+	}
+	_, err := time.LoadLocation(appTimezone)
+	if err != nil {
+		return nil, fmt.Errorf("Invalid Timezone: %s. Error: %s", appTimezone, err.Error())
+	}
+	config.AppTimezone = appTimezone
 	return config, nil
 }

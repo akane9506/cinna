@@ -94,6 +94,7 @@ func main() {
 		agent,
 		config.WebhookURL,
 		config.WebhookSecret,
+		config.AppTimezone,
 		logger,
 	)
 	if err != nil {

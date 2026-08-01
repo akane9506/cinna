@@ -9,8 +9,6 @@ import (
 
 const preChatPassthroughNodeName = "pre_chat_passthrough"
 
-const COMPRESSION_THRESHOLD = 50
-
 var branchExitNodeName string = preChatPassthroughNodeName
 
 func (a *AgentCore) AddIntentBranch(exitNodeName string) {
