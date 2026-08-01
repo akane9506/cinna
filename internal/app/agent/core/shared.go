@@ -8,6 +8,7 @@ import (
 )
 
 const SENSITIVE_PREFIX = "[SENSITIVE]"
+const COMPRESSION_THRESHOLD = 60
 
 type GraphInput struct {
 	TelegramUserID int64

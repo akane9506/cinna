@@ -4,12 +4,14 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 var mockDBUrl string = "postgres://a:a_pswrd@localhost:5432/cinna"
 var mockDeepseekAPIKey string = "deepseek_api_key"
 var mockMessageEncKey = "key"
 var mockMessageEncKeyID = "abcdef"
+var mockTimezone = "America/Los_Angeles"
 
 func TestLoadConfig(t *testing.T) {
 	tests := []struct {
@@ -22,6 +24,7 @@ func TestLoadConfig(t *testing.T) {
 		webhookSecretEnv           string
 		messageEncKeyID            string
 		messageEncKey              string
+		appTimezone                string
 		expected                   *Config
 		expectedRuntimeError       bool
 		expectDBUrlError           bool
@@ -30,6 +33,7 @@ func TestLoadConfig(t *testing.T) {
 		expectWebhookSecretError   bool
 		expectMessageEncKeyError   bool
 		expectMessageEncKeyIDError bool
+		expectAppTimezoneError     bool
 	}{
 		{
 			name:            "success in development",
@@ -38,6 +42,7 @@ func TestLoadConfig(t *testing.T) {
 			deepseekAPIEnv:  mockDeepseekAPIKey,
 			messageEncKeyID: mockMessageEncKeyID,
 			messageEncKey:   mockMessageEncKey,
+			appTimezone:     mockTimezone,
 			expected: &Config{
 				TelegramBotToken:       "abc",
 				DatabaseURL:            mockDBUrl,
@@ -45,6 +50,7 @@ func TestLoadConfig(t *testing.T) {
 				RuntimeEnv:             "development",
 				MessageEncryptionKeyID: mockMessageEncKeyID,
 				MessageEncryptionKey:   mockMessageEncKey,
+				AppTimezone:            mockTimezone,
 			},
 		},
 		{
@@ -57,6 +63,7 @@ func TestLoadConfig(t *testing.T) {
 			messageEncKey:    mockMessageEncKey,
 			webhookUrlEnv:    "https://localhost",
 			webhookSecretEnv: "secret",
+			appTimezone:      mockTimezone,
 			expected: &Config{
 				TelegramBotToken:       "abc",
 				RuntimeEnv:             "production",
@@ -66,6 +73,7 @@ func TestLoadConfig(t *testing.T) {
 				WebhookSecret:          "secret",
 				MessageEncryptionKeyID: mockMessageEncKeyID,
 				MessageEncryptionKey:   mockMessageEncKey,
+				AppTimezone:            mockTimezone,
 			},
 		},
 		{
@@ -116,7 +124,7 @@ func TestLoadConfig(t *testing.T) {
 			expectMessageEncKeyError: true,
 		},
 		{
-			name:                       "missing msg enc key in prod",
+			name:                       "missing msg enc key id in prod",
 			runtimeEnv:                 "production",
 			telegramEnv:                "abc",
 			dbUrlEnv:                   mockDBUrl,
@@ -125,6 +133,32 @@ func TestLoadConfig(t *testing.T) {
 			webhookUrlEnv:              "https://localhost",
 			webhookSecretEnv:           "secret",
 			expectMessageEncKeyIDError: true,
+		},
+		{
+			name:                   "missing timezone",
+			runtimeEnv:             "production",
+			telegramEnv:            "abc",
+			dbUrlEnv:               mockDBUrl,
+			deepseekAPIEnv:         mockDeepseekAPIKey,
+			messageEncKey:          mockMessageEncKey,
+			messageEncKeyID:        mockMessageEncKeyID,
+			webhookUrlEnv:          "https://localhost",
+			webhookSecretEnv:       "secret",
+			appTimezone:            "",
+			expectAppTimezoneError: true,
+		},
+		{
+			name:                   "invalid timezone",
+			runtimeEnv:             "production",
+			telegramEnv:            "abc",
+			dbUrlEnv:               mockDBUrl,
+			deepseekAPIEnv:         mockDeepseekAPIKey,
+			messageEncKey:          mockMessageEncKey,
+			messageEncKeyID:        mockMessageEncKeyID,
+			webhookUrlEnv:          "https://localhost",
+			webhookSecretEnv:       "secret",
+			appTimezone:            "abc",
+			expectAppTimezoneError: true,
 		},
 	}
 
@@ -138,9 +172,10 @@ func TestLoadConfig(t *testing.T) {
 			t.Setenv(deepseekEnv, tt.deepseekAPIEnv)
 			t.Setenv(messageEncryptionKeyEnv, tt.messageEncKey)
 			t.Setenv(messageEncryptionKeyIDEnv, tt.messageEncKeyID)
+			t.Setenv(appTimezoneEnv, tt.appTimezone)
 			config, err := LoadConfig()
 			if tt.expected == nil {
-				assert.Error(t, err)
+				require.Error(t, err)
 				if tt.expectTelegramError {
 					assert.Contains(t, err.Error(), telegramBotTokenEnv)
 				}
@@ -161,6 +196,9 @@ func TestLoadConfig(t *testing.T) {
 				}
 				if tt.expectMessageEncKeyIDError {
 					assert.Contains(t, err.Error(), messageEncryptionKeyIDEnv)
+				}
+				if tt.expectAppTimezoneError {
+					assert.Contains(t, err.Error(), "Invalid Timezone")
 				}
 			} else {
 				assert.Equal(t, config, tt.expected)

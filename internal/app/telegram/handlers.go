@@ -127,10 +127,14 @@ func (c *Client) handleText(ctx context.Context, b *bot.Bot, update *models.Upda
 	}
 	logger := c.logger.With("path", "internal/telegram/handlers/handleText")
 	typingDone := setTypingAction(ctx, b, update)
+	loc, _ := time.LoadLocation(c.timezone) // config has already verified timezone loading
+	now := time.Now().In(loc)
 	reply, err := c.agentHandler.HandleText(
 		ctx,
 		update.Message.From.ID,
-		update.Message.Text)
+		now,
+		update.Message.Text,
+	)
 	if err != nil {
 		logger.Error(
 			"failed to get reply from agent",
