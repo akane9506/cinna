@@ -15,26 +15,38 @@ Cinna is a customizable Telegram ReAct agent bot built with Go and Eino. It supp
 
 ## Agent Graph
 
+[Mermaid Graph](https://mermaid.ai/d/a442ee33-6405-4268-84cb-9b0fb390b6fe)
+
 ```mermaid
 flowchart LR
-    Start(["START"]) --> InputProcessLambda["`**Input Process Lambda**<br><br>*Process input and store necessary info in the state*<br><br> In: *TaskInput<br>Out: []*schema.Message`"]
+    Start(["START"]) --> InputProcessLambda["`**Input Process Lambda**<br><br>*Process input and store necessary info in the state*<br><br> In: *GraphInput<br>Out: []*schema.Message`"]
     InputProcessLambda --> IntentClassifier["`**Intent Classification**<br><br>*classifies user intention and possible action*<br><br>In: []*schema.Message<br>Out: *schema.Message*`"]
     IntentClassifier --> IntentLambda["`**Intent Validation Lambda**<br><br>*Validates intent classificaion node output, and feed intention to the output branching*<br><br>In: *schema.Message<br>Out: []*schema.Message`"]
     IntentLambda --> IntentRouter["`**Branch by Intent**<br>Intent:<br>SHOPPING | FEEDBACK | OTHER<br>`"]
     IntentRouter -- SHOPPING --> ListLambda["<b>List Lambda</b><br><br><i>List contents in the shopping list table <br>(note: 1 - list expired items, 2: items are with categories, notify cinna to responde with the corresponding category)</i><br><br>In: []*schema.Message<br>Out: []*schema.Message"]
     ListLambda --> ActionRouter["`**Branch by Action Type**<br>Action:<br>LIST | UPDATE | None<br>`"]
-    ActionRouter -- UPDATE --> ShoppingPlanner@{ label: "**Shopping Planner**<br>(we don't save this output into history state)<br><br>*Reads user-cinna chat history and decide the Shopping DB operation*<br><br>In: []*schema.Message<br>Out: *schema.Message" }
-    ActionRouter -- LIST --> CinnaReply["CinnaReply"]
+    ActionRouter -->|UPDATE| ShoppingPlanner["`**Shopping Planner**<br>(we don't save this output into history state)<br><br>*Reads user-cinna chat history and decide the Shopping DB operation*<br><br>In: []*schema.Message<br>Out: *schema.Message`"]
+    ActionRouter -- LIST --> Passthrough(["Passthrough Node"])
     ShoppingPlanner --> UpdateShoppingListLambda["`**Update Shopping List Lambda**<br><br>Parse the output from the planner into an array of commands, then execute commands to update the DB shopping list<br><br>In:*schema.Message<br>out: []*schema.Message`"]
-    UpdateShoppingListLambda --> CinnaReply
     IntentRouter -- FEEDBACK --> FeedbackListLambda["`**List Feedback Lambda**<br><br>Prepare pending/in-progress tasks for the Feedback Planner<br><br>In: []*schema.Message<br>Out: []*schema.Message`"]
-    FeedbackActionRouter -- NONE | LIST (we don't support LIST command for feedbacks) --> CinnaReply
-    FeedbackListLambda --> FeedbackActionRouter["<b>Branch by Action Type</b><br>Action:<br>List | UPDATE | NONE"]
-    FeedbackActionRouter -- UPDATE --> FeedbackPlanner@{ label: "**Feedback Planner**<br>(we don't save this output into history state as well)<br><br>Check the current user feedback lists, and decide which items should be added/updated.<br><br>In: []*schema.Message<br>Out: *schema.Message" }
+    FeedbackActionRouter["<b>Branch by Action Type</b><br>Action:<br>List | UPDATE | NONE"] -->|"NONE | LIST (we don't support LIST command for feedbacks)"| Passthrough
+    FeedbackListLambda --> FeedbackActionRouter
+    FeedbackActionRouter -->|UPDATE| FeedbackPlanner["`**Feedback Planner**<br>(we don't save this output into history state as well)<br><br>Check the current user feedback lists, and decide which items should be added/updated.<br><br>In: []*schema.Message<br>Out: *schema.Message`"]
     FeedbackPlanner --> UpdateFeedbackLambda["<b>Update Feedback Items Lambda</b><br><br>Parse the output from the planner, then update the DB feedback list<br><br>In: *schema.Message<br>out: []*schema.Message"]
-    UpdateFeedbackLambda --> CinnaReply
-    IntentRouter -- OTHER --> CinnaReply
-    CinnaReply --> ProcessOutputLambda["<b>Process Output Lambda</b><br><br>Organize and output chat history, response, and other meta data<br><br>In: *schema.Message<br>out: *TaskOutput"] --> End(["END"])
+    UpdateShoppingListLambda --> Passthrough
+    UpdateFeedbackLambda --> Passthrough
+    IntentRouter -- OTHER --> Passthrough
+    Passthrough --> MemoryCompressionRouter["<b>Conversation size check</b>"]
+    MemoryCompressionRouter -- TRUE --> StartOfReplyAndCompressionChain["`**START**<br>Compression+Reply Chain`"]
+    StartOfReplyAndCompressionChain --> MemoryCompressor["`**Memory Compressor**<br><br>Compresses chat history into enhanced notes.<br><br>In: []*schema.Message<br>Out: *schema.Message`"] & ReplyGenerator["`****Reply Generator****<br><br>Generates a reply based on the current turn.<br><br>In: []*schema.Message<br>Out: *schema.Message`"]
+    ReplyGenerator -->|"key: cinna_reply"| CompressionChainPostProcessor["`**Chain Post Processor**<br><br>Waits for and combines the results from parallel nodes.<br><br>In: map[string]any<br>Out: *ReplyCompressionOutput`"]
+    MemoryCompressor -->|"key: memory_compression"| CompressionChainPostProcessor
+    MemoryCompressionRouter -- FALSE --> StartOfReplyOnlyChain["`**START**<br>Reply Only Chain`"]
+    StartOfReplyOnlyChain --> ReplyGenerator & PassThroughNode(["Passthrough node"])
+    PassThroughNode --> CompressionChainPostProcessor
+    CompressionChainPostProcessor --> EndOfReplyAndCompressionChain["END\nCompression+Reply Chain"]
+    EndOfReplyAndCompressionChain --> ProcessOutputLambda["<b>Process Output Lambda</b><br><br>Organizes and outputs chat history, response, and other metadata<br><br>In: *ReplyCompressionOutput<br>Out: *GraphOutput"]
+    ProcessOutputLambda --> End(["END"])
 ```
 
 Current capabilities include:
@@ -66,6 +78,7 @@ Edit `.env` before loading it. For local development, set at least:
 ```dotenv
 GO_ENV=development
 TELEGRAM_BOT_TOKEN=your_telegram_bot_token
+APP_TIMEZONE=America/Los_Angeles
 DATABASE_URL=postgres://cinna:change_me@localhost:5432/cinna?sslmode=disable
 DEEPSEEK_API_KEY=your_deepseek_api_key
 MESSAGE_ENCRYPTION_KEY=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
@@ -86,6 +99,8 @@ Production webhook mode also requires:
 GO_ENV=production
 WEBHOOK_URL=https://your-public-host.example
 WEBHOOK_SECRET=your_webhook_secret
+# Optional; defaults to 8080.
+PORT=8080
 ```
 
 Load the environment:
@@ -165,33 +180,6 @@ docker compose exec postgres \
 
 Shopping-list rows reference `allowed_users`, so a Telegram user must be in
 the allow list before Cinna can store items for them.
-
-## Shopping Lists
-
-Cinna supports natural-language requests to:
-
-- list the current shopping list;
-- add one or more items;
-- remove existing items; and
-- modify an item's name or category.
-
-The supported categories are `grocery`, `pharmacy`, `pet`, `toy`,
-`stationery`, and `other`. Item names are unique per user after trimming and
-case normalization. Adding an existing name updates its category and
-`updated_at` timestamp instead of creating a duplicate.
-
-When Cinna reads a list, it separates active items from items whose
-`updated_at` timestamp is older than one month. Expired items remain in the
-database and can still be modified or removed.
-
-Example requests:
-
-```text
-Show me my shopping list.
-Add milk, cat litter, and a notebook to my shopping list.
-Remove the milk.
-Change the notebook to an A4 notebook.
-```
 
 ## Run
 
@@ -309,54 +297,3 @@ go vet ./...
 Manual model and agent tests are guarded by `internal/utils.EnforceManualTest`.
 They are skipped unless `RUN_MANUAL_TEST=1` is set, and they require
 `DEEPSEEK_API_KEY`.
-
-Run the DeepSeek model checks:
-
-```bash
-RUN_MANUAL_TEST=1 go test ./internal/app/agent \
-  -run 'TestDeepseekFlash(Model|JSON)Manual' -v
-```
-
-Run the manual agent graph checks:
-
-```bash
-RUN_MANUAL_TEST=1 go test ./internal/app/agent \
-  -run 'Test(CinnaChat|IntentLambda|ShoppingTaskPlanningNode|FeedbackPlannerNode)$' -v
-```
-
-The model checks only require `DEEPSEEK_API_KEY`. The agent graph checks load
-the application configuration, so `.env` must also contain
-`TELEGRAM_BOT_TOKEN` and `DATABASE_URL` even though these focused checks do not
-connect to Telegram or PostgreSQL.
-
-If you already loaded `.env`, enable manual tests with:
-
-```dotenv
-RUN_MANUAL_TEST=1
-```
-
-## Project Structure
-
-```text
-cinna/
-├── cmd/
-│   └── cinna/
-├── db/
-│   ├── queries/
-│   └── schema.sql
-├── internal/
-│   ├── app/
-│   │   ├── agent/
-│   │   │   ├── memory/
-│   │   │   └── prompt/
-│   │   ├── ports/
-│   │   └── telegram/
-│   ├── postgres/
-│   │   └── sqlc/
-│   └── utils/
-├── .dockerignore
-├── Dockerfile
-├── compose.yaml
-├── go.mod
-└── sqlc.yaml
-```
