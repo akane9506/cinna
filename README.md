@@ -15,6 +15,8 @@ Cinna is a customizable Telegram ReAct agent bot built with Go and Eino. It supp
 
 ## Agent Graph
 
+[Mermaid Graph](https://mermaid.ai/d/a442ee33-6405-4268-84cb-9b0fb390b6fe)
+
 ```mermaid
 flowchart LR
     Start(["START"]) --> InputProcessLambda["`**Input Process Lambda**<br><br>*Process input and store necessary info in the state*<br><br> In: *GraphInput<br>Out: []*schema.Message`"]
@@ -76,6 +78,7 @@ Edit `.env` before loading it. For local development, set at least:
 ```dotenv
 GO_ENV=development
 TELEGRAM_BOT_TOKEN=your_telegram_bot_token
+APP_TIMEZONE=America/Los_Angeles
 DATABASE_URL=postgres://cinna:change_me@localhost:5432/cinna?sslmode=disable
 DEEPSEEK_API_KEY=your_deepseek_api_key
 MESSAGE_ENCRYPTION_KEY=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
@@ -96,6 +99,8 @@ Production webhook mode also requires:
 GO_ENV=production
 WEBHOOK_URL=https://your-public-host.example
 WEBHOOK_SECRET=your_webhook_secret
+# Optional; defaults to 8080.
+PORT=8080
 ```
 
 Load the environment:
