@@ -181,33 +181,6 @@ docker compose exec postgres \
 Shopping-list rows reference `allowed_users`, so a Telegram user must be in
 the allow list before Cinna can store items for them.
 
-## Shopping Lists
-
-Cinna supports natural-language requests to:
-
-- list the current shopping list;
-- add one or more items;
-- remove existing items; and
-- modify an item's name or category.
-
-The supported categories are `grocery`, `pharmacy`, `pet`, `toy`,
-`stationery`, and `other`. Item names are unique per user after trimming and
-case normalization. Adding an existing name updates its category and
-`updated_at` timestamp instead of creating a duplicate.
-
-When Cinna reads a list, it separates active items from items whose
-`updated_at` timestamp is older than one month. Expired items remain in the
-database and can still be modified or removed.
-
-Example requests:
-
-```text
-Show me my shopping list.
-Add milk, cat litter, and a notebook to my shopping list.
-Remove the milk.
-Change the notebook to an A4 notebook.
-```
-
 ## Run
 
 Run Cinna locally with Telegram long polling:
@@ -324,54 +297,3 @@ go vet ./...
 Manual model and agent tests are guarded by `internal/utils.EnforceManualTest`.
 They are skipped unless `RUN_MANUAL_TEST=1` is set, and they require
 `DEEPSEEK_API_KEY`.
-
-Run the DeepSeek model checks:
-
-```bash
-RUN_MANUAL_TEST=1 go test ./internal/app/agent \
-  -run 'TestDeepseekFlash(Model|JSON)Manual' -v
-```
-
-Run the manual agent graph checks:
-
-```bash
-RUN_MANUAL_TEST=1 go test ./internal/app/agent \
-  -run 'Test(CinnaChat|IntentLambda|ShoppingTaskPlanningNode|FeedbackPlannerNode)$' -v
-```
-
-The model checks only require `DEEPSEEK_API_KEY`. The agent graph checks load
-the application configuration, so `.env` must also contain
-`TELEGRAM_BOT_TOKEN` and `DATABASE_URL` even though these focused checks do not
-connect to Telegram or PostgreSQL.
-
-If you already loaded `.env`, enable manual tests with:
-
-```dotenv
-RUN_MANUAL_TEST=1
-```
-
-## Project Structure
-
-```text
-cinna/
-├── cmd/
-│   └── cinna/
-├── db/
-│   ├── queries/
-│   └── schema.sql
-├── internal/
-│   ├── app/
-│   │   ├── agent/
-│   │   │   ├── memory/
-│   │   │   └── prompt/
-│   │   ├── ports/
-│   │   └── telegram/
-│   ├── postgres/
-│   │   └── sqlc/
-│   └── utils/
-├── .dockerignore
-├── Dockerfile
-├── compose.yaml
-├── go.mod
-└── sqlc.yaml
-```
