@@ -14,6 +14,7 @@
 - “记一下苹果和面包” -> {"intent":"SHOPPING","action":"UPDATE"}
 - “看看我的购物清单” -> {"intent":"SHOPPING","action":"LIST"}
 - “把牛奶删掉” -> {"intent":"SHOPPING","action":"UPDATE"}
+- “已经买好啦” -> {"intent":"SHOPPING","action":"UPDATE"}
 
 2. FEEDBACK
    用户反馈产品、功能、体验、错误、异常，或提出功能建议时使用。
