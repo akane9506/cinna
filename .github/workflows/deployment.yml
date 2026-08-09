@@ -56,6 +56,15 @@ jobs:
             "${REGION}-docker.pkg.dev" \
             --quiet
 
+      - name: Apply database schema to Neon
+        env:
+          NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
+        run: |
+          psql "$NEON_DATABASE_URL" \
+            --set=ON_ERROR_STOP=1 \
+            --single-transaction \
+            --file=db/schema.sql
+
       - name: Set image information
         id: image
         run: |
