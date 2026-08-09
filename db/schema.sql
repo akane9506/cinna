@@ -12,6 +12,10 @@ CREATE TABLE IF NOT EXISTS allowed_users (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- pgls-ignore lint/safety/addingFieldWithDefault
+ALTER TABLE allowed_users
+ADD COLUMN IF NOT EXISTS daily_notification BOOLEAN NOT NULL DEFAULT FALSE;
+
 -- Table for the shopping list
 -- If you modify this part, also change internal/app/agent/prompt/shopping_task_planner.md
 DO $$
