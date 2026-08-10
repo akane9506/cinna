@@ -29,3 +29,19 @@ RETURNING *;
 -- name: ListAllowedUsers :many
 SELECT * FROM allowed_users
     ORDER BY updated_at;
+
+-- name: SubscribeNotification :one
+UPDATE allowed_users
+SET
+    daily_notification = TRUE,
+    updated_at = NOW()
+WHERE telegram_user_id = sqlc.arg(telegram_user_id)
+RETURNING *;
+
+-- name: UnsubscribeNotification :one
+UPDATE allowed_users
+SET
+    daily_notification = FALSE,
+    updated_at = NOW()
+WHERE telegram_user_id = sqlc.arg(telegram_user_id)
+RETURNING *;

@@ -237,27 +237,6 @@ as Cloud Run is a separate step. Production runtime configuration must provide
 the variables listed in [Configuration](#configuration), including an HTTPS
 webhook URL and a database URL reachable from the deployed container.
 
-## Agent
-
-The main request path is:
-
-```text
-Telegram message
-  -> allow-list middleware
-  -> intent and action classification
-  -> shopping-list or feedback lookup (matching requests only)
-  -> shopping or feedback planning and PostgreSQL updates (updates only)
-  -> Cinna response generation
-  -> Telegram response
-```
-
-The prompts under `internal/app/agent/prompt/` are embedded into the binary.
-The agent keeps the 30 most recent messages in an in-memory, per-user working
-history and periodically flushes buffered user and final assistant messages to
-PostgreSQL. Stored message content is encrypted with `MESSAGE_ENCRYPTION_KEY`;
-the database retains up to 100 messages per user, allowing recent history to be
-restored after a process restart.
-
 ## SQL Commands
 
 Open a PostgreSQL shell:

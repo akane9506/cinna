@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	_ "embed"
 	"errors"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -15,6 +16,11 @@ import (
 
 //go:embed command_list.md
 var commandDoc string
+
+//go:embed command_list_admin.md
+var adminCommandDoc string
+
+var adminCommands = []string{"/addmember"}
 
 // general handler, processes all incoming updates
 func (c *Client) handleUpdate(ctx context.Context, b *bot.Bot, update *models.Update) {
@@ -41,22 +47,27 @@ func (c *Client) handleCommands(
 			"error", err)
 		return
 	}
-	if !isAdmin {
+	command, args := parseCommandAndArgs(update.Message.Text)
+	if slices.Contains(adminCommands, command) && !isAdmin {
 		c.sendCommandReply(
 			ctx,
 			b,
 			update.Message.Chat.ID,
-			"⛔ <b>Permission denied</b>\n\nCommand tools are only available to bot administrators.",
+			"⛔ <b>Permission denied</b>\n\nthis command is only available to bot administrators.",
 		)
 		return
 	}
-	command, args := parseCommandAndArgs(update.Message.Text)
 	var replyMessage string
 	switch command {
 	case "/addmember":
 		replyMessage = c.handleAddMemberCommand(ctx, b, args)
 	case "/help":
 		replyMessage = commandDoc
+		if isAdmin {
+			replyMessage += "\n" + adminCommandDoc
+		}
+	case "/notify":
+		replyMessage = c.handleManageNotificationCommand(ctx, telegramUserID, args)
 	default:
 		replyMessage = "❌ <b>Unknown command</b>\n\nUse /help to view the available commands."
 	}
@@ -118,6 +129,40 @@ func (c *Client) handleAddMemberCommand(
 		return "<b>Unable to add user</b>\nCheck the server logs for details."
 	}
 	return "<b>User added</b>\nThe user can now access Cinna."
+}
+
+func (c *Client) handleManageNotificationCommand(
+	ctx context.Context,
+	telegramUserID int64,
+	args []string) string {
+	logger := c.logger.With("path", "internal/telegram/handlers/handleManageNotificationCommans")
+	if len(args) != 1 {
+		return "<b>Invalid arguments</b>\nUsage: <code>/notify &lt;on|off&gt;</code>"
+	}
+	status := args[0]
+	if status != "on" && status != "off" {
+		return "<b>Invalid argument</b>\nThe argument should be either on or off"
+	}
+	if status == "on" {
+		_, err := c.repositories.AllowList.SubscribeNotification(ctx, telegramUserID)
+		if err != nil {
+			logger.Error("failed to turn on notification for the user",
+				"telegram_user_id", telegramUserID,
+				"error", err,
+			)
+			return "Failed to turn on the notification\n."
+		}
+		return "Notification <b>On</b>\n"
+	}
+	_, err := c.repositories.AllowList.UnsubscribeNotification(ctx, telegramUserID)
+	if err != nil {
+		logger.Error("failed to turn off notification for the user",
+			"telegram_user_id", telegramUserID,
+			"error", err,
+		)
+		return "Failed to turn off the notification\n."
+	}
+	return "Notification <b>Off</b>\n"
 }
 
 // handle text message

@@ -37,3 +37,13 @@ func (r *AllowListRepository) UpsertAllowedUser(
 		Role:           "member", // any user added through this method is default to be member
 	})
 }
+
+func (r *AllowListRepository) SubscribeNotification(
+	ctx context.Context, telegramUserID int64) (sqlc.AllowedUser, error) {
+	return r.queries.SubscribeNotification(ctx, telegramUserID)
+}
+
+func (r *AllowListRepository) UnsubscribeNotification(
+	ctx context.Context, telegramUserID int64) (sqlc.AllowedUser, error) {
+	return r.queries.UnsubscribeNotification(ctx, telegramUserID)
+}

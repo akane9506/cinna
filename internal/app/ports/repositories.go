@@ -19,6 +19,12 @@ type AllowListRepository interface {
 	UpsertAllowedUser(
 		ctx context.Context,
 		telegramUserID int64) (sqlc.AllowedUser, error)
+	SubscribeNotification(
+		ctx context.Context,
+		telegramUserID int64) (sqlc.AllowedUser, error)
+	UnsubscribeNotification(
+		ctx context.Context,
+		telegramUserID int64) (sqlc.AllowedUser, error)
 }
 
 type ShoppingListRepository interface {
