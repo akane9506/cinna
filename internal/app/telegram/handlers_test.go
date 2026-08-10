@@ -49,6 +49,18 @@ func (m *mockAllowListRepository) UpsertAllowedUser(
 	return sqlc.AllowedUser{}, args.Error(0)
 }
 
+func (m *mockAllowListRepository) SubscribeNotification(
+	ctx context.Context, telegramUserID int64) (sqlc.AllowedUser, error) {
+	args := m.Called(ctx, telegramUserID)
+	return sqlc.AllowedUser{}, args.Error(0)
+}
+
+func (m *mockAllowListRepository) UnsubscribeNotification(
+	ctx context.Context, telegramUserID int64) (sqlc.AllowedUser, error) {
+	args := m.Called(ctx, telegramUserID)
+	return sqlc.AllowedUser{}, args.Error(0)
+}
+
 // tests
 
 func TestIsCommand(t *testing.T) {
@@ -203,6 +215,90 @@ func TestHandleAddMemberCommand(t *testing.T) {
 				return
 			}
 			assert.Contains(t, msg, "User added")
+		})
+	}
+}
+
+func TestHandleManageNotificationCommand(t *testing.T) {
+	t.Parallel()
+
+	const telegramUserID int64 = 123456
+
+	tests := []struct {
+		name             string
+		args             []string
+		want             string
+		subscribeError   error
+		unsubscribeError error
+	}{
+		{
+			name: "invalid arguments",
+			args: []string{},
+			want: "<b>Invalid arguments</b>\nUsage: <code>/notify &lt;on|off&gt;</code>",
+		},
+		{
+			name: "too many arguments",
+			args: []string{"on", "extra"},
+			want: "<b>Invalid arguments</b>\nUsage: <code>/notify &lt;on|off&gt;</code>",
+		},
+		{
+			name: "invalid status",
+			args: []string{"maybe"},
+			want: "<b>Invalid argument</b>\nThe argument should be either on or off",
+		},
+		{
+			name: "turn on success",
+			args: []string{"on"},
+			want: "Notification <b>On</b>\n",
+		},
+		{
+			name:           "turn on failure",
+			args:           []string{"on"},
+			want:           "Failed to turn on the notification\n.",
+			subscribeError: errors.New("subscribe failed"),
+		},
+		{
+			name: "turn off success",
+			args: []string{"off"},
+			want: "Notification <b>Off</b>\n",
+		},
+		{
+			name:             "turn off failure",
+			args:             []string{"off"},
+			want:             "Failed to turn off the notification\n.",
+			unsubscribeError: errors.New("unsubscribe failed"),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			allowListRepo := new(mockAllowListRepository)
+			client := Client{
+				logger:       slog.New(slog.NewTextHandler(io.Discard, nil)),
+				repositories: &ports.Repositories{AllowList: allowListRepo},
+			}
+			ctx := context.Background()
+			if len(tt.args) == 1 {
+				switch tt.args[0] {
+				case "on":
+					allowListRepo.
+						On("SubscribeNotification", ctx, telegramUserID).
+						Return(tt.subscribeError).
+						Once()
+				case "off":
+					allowListRepo.
+						On("UnsubscribeNotification", ctx, telegramUserID).
+						Return(tt.unsubscribeError).
+						Once()
+				}
+			}
+			got := client.handleManageNotificationCommand(
+				ctx,
+				telegramUserID,
+				tt.args,
+			)
+			assert.Equal(t, tt.want, got)
+			allowListRepo.AssertExpectations(t)
 		})
 	}
 }
