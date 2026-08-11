@@ -188,7 +188,7 @@ func (c *Client) handleText(ctx context.Context, b *bot.Bot, update *models.Upda
 		)
 		b.SendMessage(ctx, &bot.SendMessageParams{
 			ChatID: update.Message.Chat.ID,
-			Text:   "inter server error",
+			Text:   "internal server error",
 		})
 		close(typingDone)
 		return

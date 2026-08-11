@@ -75,12 +75,13 @@ func LoadConfig() (*Config, error) {
 			return nil, fmt.Errorf("%s should starts with https://, got: %s", webhookURLEnv, webhookURL)
 		}
 		config.WebhookURL = webhookURL
-		webhookSecret := strings.TrimSpace(os.Getenv(webhookSecretEnv))
-		if webhookSecret == "" {
-			return nil, fmt.Errorf("%s shouldn't be empty", webhookSecretEnv)
-		}
-		config.WebhookSecret = webhookSecret
 	}
+	// we need this webhook secret for local server function test
+	webhookSecret := strings.TrimSpace(os.Getenv(webhookSecretEnv))
+	if webhookSecret == "" {
+		return nil, fmt.Errorf("%s shouldn't be empty", webhookSecretEnv)
+	}
+	config.WebhookSecret = webhookSecret
 
 	// setup LLM API keys
 	deepseekAPIKey := strings.TrimSpace(os.Getenv(deepseekEnv))
