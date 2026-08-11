@@ -36,18 +36,20 @@ func TestLoadConfig(t *testing.T) {
 		expectAppTimezoneError     bool
 	}{
 		{
-			name:            "success in development",
-			telegramEnv:     "abc",
-			dbUrlEnv:        mockDBUrl,
-			deepseekAPIEnv:  mockDeepseekAPIKey,
-			messageEncKeyID: mockMessageEncKeyID,
-			messageEncKey:   mockMessageEncKey,
-			appTimezone:     mockTimezone,
+			name:             "success in development",
+			telegramEnv:      "abc",
+			dbUrlEnv:         mockDBUrl,
+			deepseekAPIEnv:   mockDeepseekAPIKey,
+			messageEncKeyID:  mockMessageEncKeyID,
+			messageEncKey:    mockMessageEncKey,
+			webhookSecretEnv: "secret",
+			appTimezone:      mockTimezone,
 			expected: &Config{
 				TelegramBotToken:       "abc",
 				DatabaseURL:            mockDBUrl,
 				DeepseekAPIKey:         mockDeepseekAPIKey,
 				RuntimeEnv:             "development",
+				WebhookSecret:          "secret",
 				MessageEncryptionKeyID: mockMessageEncKeyID,
 				MessageEncryptionKey:   mockMessageEncKey,
 				AppTimezone:            mockTimezone,
