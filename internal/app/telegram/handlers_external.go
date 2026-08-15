@@ -11,6 +11,8 @@ import (
 
 // This file exposes telegram handlers that can be used by other packages
 
+const NUM_WORKERS = 2 // spawn two workers to process daily notifications concurrently
+
 func (c *Client) HandleDailyNotification(ctx context.Context) error {
 	logger := c.logger.With("path", "internal/app/telegram/handlers_external/HandleDailyNotification")
 	subscribers, err := c.repositories.AllowList.DailyNotificationSubscribers(ctx)
@@ -21,10 +23,9 @@ func (c *Client) HandleDailyNotification(ctx context.Context) error {
 		return fmt.Errorf("failed to get daily notification subscribers")
 	}
 
-	workers := 2 // spawn two workers to process daily notifications concurrently
 	jobs := make(chan int64)
 	var wg sync.WaitGroup
-	for range workers {
+	for range NUM_WORKERS {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -38,16 +39,18 @@ func (c *Client) HandleDailyNotification(ctx context.Context) error {
 		}()
 	}
 
+enqueue:
 	for _, userID := range subscribers {
 		select {
 		case <-ctx.Done():
-			break
+			break enqueue
 		case jobs <- userID:
 		}
 	}
+
 	close(jobs)
 	wg.Wait()
-	return nil
+	return ctx.Err()
 }
 
 func (c *Client) sendDailyNotification(ctx context.Context, userID int64) {
@@ -70,5 +73,11 @@ func (c *Client) sendDailyNotification(ctx context.Context, userID int64) {
 		now,
 		"向用户发送简洁、有帮助的每日通知。内容应贴近用户当前情况，并突出最重要的更新或下一步行动；避免泛泛而谈和不必要的细节。",
 	)
+	if err != nil {
+		logger.Error("Failed to generate daily notification message",
+			"error", err,
+		)
+		return // do not let user know when the agent is down
+	}
 	c.bot.SendMessage(ctx, &bot.SendMessageParams{ChatID: userID, Text: reply})
 }
