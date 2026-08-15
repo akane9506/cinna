@@ -41,7 +41,7 @@ func NewServer(
 func (s *Server) ServeHTTPDev(ctx context.Context) {
 	logger := s.logger.With("path", "interval/app/server/server/ServeHTTPDev")
 	mux := http.NewServeMux()
-	mux.Handle("/internal/daily-notification", s.handleDailyNotification())
+	mux.Handle("/internal/daily-notification", s.handleDailyNotification(ctx))
 	server := http.Server{
 		Addr:    ":" + s.port,
 		Handler: mux,
@@ -55,6 +55,7 @@ func (s *Server) ServeHTTPDev(ctx context.Context) {
 	select {
 	case <-ctx.Done():
 		logger.Info("shutting down http server")
+		// we pass system ctx to daily notification, because the process does not rely on request's context
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		if err := server.Shutdown(shutdownCtx); err != nil {
@@ -78,7 +79,8 @@ func (s *Server) ServeHTTPProd(ctx context.Context) {
 	}
 	mux := http.NewServeMux()
 	mux.Handle("/", s.tgClient.WebhookHandler())
-	mux.Handle("/internal/daily-notification", s.handleDailyNotification())
+	// we pass system ctx to daily notification, because the process does not rely on request's context
+	mux.Handle("/internal/daily-notification", s.handleDailyNotification(ctx))
 	server := http.Server{
 		Addr:    ":" + s.port,
 		Handler: mux,
