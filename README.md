@@ -58,6 +58,13 @@ Functions:
 - Commands for help, managing allow-list access, and opting in or out of daily notifications
 - Personalized daily notifications generated from each user’s current context
 
+## Chat Commands
+
+- `/help`: Display this help information.
+- `/notify on`: Enable daily scheduled notifications.
+- `/notify off`: Disable daily scheduled notifications.
+- `/addmember <telegram_user_id>`: Add a user to Cinna's allow list (administrators only). The user must have started the Cinna Bot.
+
 ## Project Structure
 
 ```text

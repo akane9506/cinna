@@ -58,6 +58,13 @@ flowchart LR
 - 提供帮助、允许名单管理及每日通知订阅开关命令
 - 基于每位用户当前上下文生成个性化每日通知
 
+## 对话窗口命令
+
+- `/help`：显示帮助信息。
+- `/notify on`：开启每日定时通知。
+- `/notify off`：关闭每日定时通知。
+- `/addmember <telegram_user_id>`：将用户加入允许名单（仅管理员）。目标用户须已启动过 Cinna Bot。
+
 ## 项目结构
 
 ```text
@@ -201,13 +208,6 @@ docker compose exec postgres \
 ```
 
 购物清单的记录关联至 `allowed_users`，因此 Cinna 只能为允许名单中的 Telegram 用户存储条目。
-
-## 命令
-
-- `/help`：显示帮助信息。
-- `/notify on`：开启每日定时通知。
-- `/notify off`：关闭每日定时通知。
-- `/addmember <telegram_user_id>`：将用户加入允许名单（仅管理员）。目标用户须已启动过 Cinna Bot。
 
 ## 运行
 
