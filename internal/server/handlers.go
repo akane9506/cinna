@@ -28,10 +28,14 @@ func (s *Server) handleDailyNotification() http.HandlerFunc {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
-		s.logger.Info(
-			"notification send",
-			"user", 123,
-		)
+		ctx := r.Context()
+		if err := s.tgClient.HandleDailyNotification(ctx); err != nil {
+			logger.Error("failed to send daily notifications",
+				"error", err,
+			)
+			http.Error(w, "failed to send notification", http.StatusInternalServerError)
+			return
+		}
 		w.WriteHeader(http.StatusOK)
 	}
 }

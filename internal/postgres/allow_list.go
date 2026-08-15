@@ -47,3 +47,8 @@ func (r *AllowListRepository) UnsubscribeNotification(
 	ctx context.Context, telegramUserID int64) (sqlc.AllowedUser, error) {
 	return r.queries.UnsubscribeNotification(ctx, telegramUserID)
 }
+
+func (r *AllowListRepository) DailyNotificationSubscribers(
+	ctx context.Context) ([]int64, error) {
+	return r.queries.DailyNotificationSubscribers(ctx)
+}

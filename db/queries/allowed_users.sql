@@ -45,3 +45,7 @@ SET
     updated_at = NOW()
 WHERE telegram_user_id = sqlc.arg(telegram_user_id)
 RETURNING *;
+
+-- name: DailyNotificationSubscribers :many
+SELECT telegram_user_id FROM allowed_users
+WHERE is_active = TRUE AND daily_notification = TRUE;
