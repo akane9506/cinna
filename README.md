@@ -9,6 +9,8 @@
 ![CI](https://github.com/akane9506/cinna/actions/workflows/ci.yml/badge.svg)
 ![Deploy](https://github.com/akane9506/cinna/actions/workflows/deployment.yml/badge.svg)
 
+English | [简体中文](./README.zh.md)
+
 </div>
 
 Cinna is a customizable Telegram ReAct agent bot built with Go and Eino. It supports configurable sub-agents and modules for a variety of use cases, uses database-backed memory to manage daily tasks while retaining long-term context across conversations, and protects historical messages with encryption for improved privacy and security.
@@ -49,13 +51,44 @@ flowchart LR
     ProcessOutputLambda --> End(["END"])
 ```
 
-Current capabilities include:
+Functions:
 
 - Telegram long polling in development and webhooks in production
-- Specialized **sub-models** that improve task accuracy while reducing token usage
-- PostgreSQL-backed data management
 - Feedback collection with pending and in-progress feedback context
-- General chat with the embedded Configurable persona
+- Commands for help, managing allow-list access, and opting in or out of daily notifications
+- Personalized daily notifications generated from each user’s current context
+
+## Chat Commands
+
+- `/help`: Display this help information.
+- `/notify on`: Enable daily scheduled notifications.
+- `/notify off`: Disable daily scheduled notifications.
+- `/addmember <telegram_user_id>`: Add a user to Cinna's allow list (administrators only). The user must have started the Cinna Bot.
+
+## Project Structure
+
+```text
+.
+├── cmd/cinna/                 # Application entry point
+├── db/
+│   ├── schema.sql             # PostgreSQL database schema
+│   └── queries/               # sqlc query definitions
+├── internal/
+│   ├── app/
+│   │   ├── agent/             # Agent graph, nodes, and prompts
+│   │   ├── ports/             # Repository and application interfaces
+│   │   ├── telegram/          # Telegram updates, commands, and notification handlers
+│   │   └── config.go          # Application configuration loading and validation
+│   ├── postgres/              # PostgreSQL repository implementations
+│   ├── security/              # Message encryption functionality
+│   ├── server/                # Webhook and event-listener HTTP server
+│   └── utils/                 # Shared utilities and test helpers
+├── assets/                    # Project image assets
+├── compose.yaml               # Local PostgreSQL and image-build configuration
+├── Dockerfile                 # Container image build definition
+├── sqlc.yaml                  # sqlc configuration
+└── README.zh.md               # Chinese documentation
+```
 
 ## Requirements
 
@@ -86,6 +119,7 @@ MESSAGE_ENCRYPTION_KEY_ID=local-v1
 POSTGRES_USER=cinna
 POSTGRES_PASSWORD=change_me
 POSTGRES_DB=cinna
+WEBHOOK_SECRET=your_webhook_secret
 ```
 
 The sample encryption key is for local development only. Generate a unique
@@ -93,7 +127,7 @@ AES-256 key for production with `openssl rand -base64 32`. Preserve both that
 key and its stable `MESSAGE_ENCRYPTION_KEY_ID` across deployments so existing
 messages remain decryptable.
 
-Production webhook mode also requires:
+Production webhook mode requires both `WEBHOOK_URL` and `WEBHOOK_SECRET`:
 
 ```dotenv
 GO_ENV=production
@@ -192,6 +226,41 @@ go run ./cmd/cinna
 In production mode, Cinna configures the Telegram webhook, starts the webhook
 receiver, and serves it on `PORT` or `8080`.
 
+## Scheduled Daily Notifications
+
+Cinna exposes `POST /internal/daily-notification` to send a daily notification
+to every user who has enabled it with `/notify on`. The request must include the
+`X-Cinna-Webhook-Secret` header, whose value matches `WEBHOOK_SECRET`.
+
+### Local development
+
+With Cinna running locally, trigger notifications manually with:
+
+```bash
+curl --request POST http://localhost:8080/internal/daily-notification \
+  --header "X-Cinna-Webhook-Secret: $WEBHOOK_SECRET"
+```
+
+### Production with Google Cloud Scheduler
+
+Create a Cloud Scheduler HTTP job that invokes the public URL of the deployed
+service. Configure the schedule and time zone for the intended delivery time:
+
+```bash
+gcloud scheduler jobs create http cinna-daily-notification \
+  --location="$REGION" \
+  --schedule="0 9 * * *" \
+  --time-zone="America/Los_Angeles" \
+  --uri="https://your-service-url/internal/daily-notification" \
+  --http-method=POST \
+  --headers="X-Cinna-Webhook-Secret=$WEBHOOK_SECRET"
+```
+
+The example runs every day at 09:00 in `America/Los_Angeles`. Replace the time
+zone, schedule, and service URL as needed. The scheduler job configuration
+contains the request header, so use a dedicated `WEBHOOK_SECRET` and restrict
+access to users who can view or manage the job.
+
 ## Container Image
 
 The multi-stage `Dockerfile` builds a statically linked Linux `amd64` binary
@@ -235,7 +304,7 @@ The Artifact Registry repository named `cinna` must already exist. This
 Compose service builds and publishes the image; deploying it to a runtime such
 as Cloud Run is a separate step. Production runtime configuration must provide
 the variables listed in [Configuration](#configuration), including an HTTPS
-webhook URL and a database URL reachable from the deployed container.
+webhook URL, webhook secret, and a database URL reachable from the deployed container.
 
 ## SQL Commands
 
