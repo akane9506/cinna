@@ -2,6 +2,7 @@ package telegram
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -20,21 +21,20 @@ func (c *Client) HandleDailyNotification(ctx context.Context) error {
 		logger.Error("failed to get daily notification subscribers",
 			"error", err,
 		)
-		return fmt.Errorf("failed to get daily notification subscribers")
+		return fmt.Errorf("failed to get daily notification subscribers: %w", err)
 	}
 
 	jobs := make(chan int64)
+	errs := make(chan error, len(subscribers))
 	var wg sync.WaitGroup
 	for range NUM_WORKERS {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for {
-				userID, ok := <-jobs
-				if !ok {
-					break
+			for userID := range jobs {
+				if err := c.sendDailyNotification(ctx, userID); err != nil {
+					errs <- err
 				}
-				c.sendDailyNotification(ctx, userID)
 			}
 		}()
 	}
@@ -50,19 +50,25 @@ enqueue:
 
 	close(jobs)
 	wg.Wait()
-	return ctx.Err()
+	close(errs)
+
+	var notificationErrors []error
+	for err := range errs {
+		notificationErrors = append(notificationErrors, err)
+	}
+	return errors.Join(append(notificationErrors, ctx.Err())...)
 }
 
-func (c *Client) sendDailyNotification(ctx context.Context, userID int64) {
+func (c *Client) sendDailyNotification(
+	ctx context.Context, userID int64) error {
 	// check if the chat exists
-	logger := c.logger.With("path", "internal/app/telegram/handler_external/sendDailyNotification")
 	_, err := c.bot.GetChat(ctx, &bot.GetChatParams{ChatID: userID})
 	if err != nil {
-		logger.Warn("failed to validate telegram chat",
-			"telegram_user_id", userID,
-			"error", err,
+		return fmt.Errorf(
+			"failed to validate telegram chat for user %d: %w",
+			userID,
+			err,
 		)
-		return
 	}
 	// process message with agent and send notification
 	loc, _ := time.LoadLocation(c.timezone) // config has already verified timezone loading
@@ -74,10 +80,17 @@ func (c *Client) sendDailyNotification(ctx context.Context, userID int64) {
 		"向用户发送简洁、有帮助的每日通知。内容应贴近用户当前情况，并突出最重要的更新或下一步行动；避免泛泛而谈和不必要的细节。",
 	)
 	if err != nil {
-		logger.Error("Failed to generate daily notification message",
-			"error", err,
+		return fmt.Errorf("failed to generate daily notification for user %d: %w",
+			userID,
+			err,
 		)
-		return // do not let user know when the agent is down
 	}
-	c.bot.SendMessage(ctx, &bot.SendMessageParams{ChatID: userID, Text: reply})
+	_, err = c.bot.SendMessage(ctx, &bot.SendMessageParams{ChatID: userID, Text: reply})
+	if err != nil {
+		return fmt.Errorf("failed to send message to user %d: %w",
+			userID,
+			err,
+		)
+	}
+	return nil
 }

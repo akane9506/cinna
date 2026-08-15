@@ -34,6 +34,7 @@ func (s *Server) handleDailyNotification() http.HandlerFunc {
 				"error", err,
 			)
 			http.Error(w, "failed to send notification", http.StatusInternalServerError)
+			return
 		}
 		w.WriteHeader(http.StatusOK)
 	}
