@@ -61,6 +61,12 @@ func (m *mockAllowListRepository) UnsubscribeNotification(
 	return sqlc.AllowedUser{}, args.Error(0)
 }
 
+func (m *mockAllowListRepository) DailyNotificationSubscribers(
+	ctx context.Context) ([]int64, error) {
+	args := m.Called(ctx)
+	return args.Get(0).([]int64), args.Error(1)
+}
+
 // tests
 
 func TestIsCommand(t *testing.T) {

@@ -1,5 +1,7 @@
 package telegram
 
+// This file contains telegram handlers for package internal use
+
 import (
 	"context"
 	"database/sql"

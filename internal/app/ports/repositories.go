@@ -25,6 +25,9 @@ type AllowListRepository interface {
 	UnsubscribeNotification(
 		ctx context.Context,
 		telegramUserID int64) (sqlc.AllowedUser, error)
+	DailyNotificationSubscribers(
+		ctx context.Context,
+	) ([]int64, error)
 }
 
 type ShoppingListRepository interface {
