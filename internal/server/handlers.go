@@ -1,12 +1,14 @@
 package server
 
 import (
+	"context"
 	"crypto/subtle"
 	"net"
 	"net/http"
+	"time"
 )
 
-func (s *Server) handleDailyNotification() http.HandlerFunc {
+func (s *Server) handleDailyNotification(ctx context.Context) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		logger := s.logger.With("path", "internal/app/server/handler/handleNotification")
 		ip, _, err := net.SplitHostPort(r.RemoteAddr)
@@ -28,14 +30,15 @@ func (s *Server) handleDailyNotification() http.HandlerFunc {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
-		ctx := r.Context()
-		if err := s.tgClient.HandleDailyNotification(ctx); err != nil {
-			logger.Error("failed to send daily notifications",
-				"error", err,
-			)
-			http.Error(w, "failed to send notification", http.StatusInternalServerError)
-			return
-		}
-		w.WriteHeader(http.StatusOK)
+		w.WriteHeader(http.StatusAccepted)
+		go func() {
+			localCtx, cancel := context.WithTimeout(ctx, 10*time.Minute)
+			defer cancel()
+			if err := s.tgClient.HandleDailyNotification(localCtx); err != nil {
+				logger.Error("failed to send daily notifications",
+					"error", err,
+				)
+			}
+		}()
 	}
 }
