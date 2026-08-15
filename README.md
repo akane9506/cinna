@@ -226,6 +226,41 @@ go run ./cmd/cinna
 In production mode, Cinna configures the Telegram webhook, starts the webhook
 receiver, and serves it on `PORT` or `8080`.
 
+## Scheduled Daily Notifications
+
+Cinna exposes `POST /internal/daily-notification` to send a daily notification
+to every user who has enabled it with `/notify on`. The request must include the
+`X-Cinna-Webhook-Secret` header, whose value matches `WEBHOOK_SECRET`.
+
+### Local development
+
+With Cinna running locally, trigger notifications manually with:
+
+```bash
+curl --request POST http://localhost:8080/internal/daily-notification \
+  --header "X-Cinna-Webhook-Secret: $WEBHOOK_SECRET"
+```
+
+### Production with Google Cloud Scheduler
+
+Create a Cloud Scheduler HTTP job that invokes the public URL of the deployed
+service. Configure the schedule and time zone for the intended delivery time:
+
+```bash
+gcloud scheduler jobs create http cinna-daily-notification \
+  --location="$REGION" \
+  --schedule="0 9 * * *" \
+  --time-zone="America/Los_Angeles" \
+  --uri="https://your-service-url/internal/daily-notification" \
+  --http-method=POST \
+  --headers="X-Cinna-Webhook-Secret=$WEBHOOK_SECRET"
+```
+
+The example runs every day at 09:00 in `America/Los_Angeles`. Replace the time
+zone, schedule, and service URL as needed. The scheduler job configuration
+contains the request header, so use a dedicated `WEBHOOK_SECRET` and restrict
+access to users who can view or manage the job.
+
 ## Container Image
 
 The multi-stage `Dockerfile` builds a statically linked Linux `amd64` binary

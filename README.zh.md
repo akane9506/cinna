@@ -219,6 +219,40 @@ go run ./cmd/cinna
 
 生产模式下，Cinna 会配置 Telegram Webhook、启动 Webhook 接收器，并通过 `PORT` 或默认端口 `8080` 提供服务。
 
+## 每日定时通知
+
+Cinna 提供 `POST /internal/daily-notification` 端点，向所有通过 `/notify on`
+开启通知的用户发送每日提醒。请求必须包含 `X-Cinna-Webhook-Secret` 请求头，
+其值须与 `WEBHOOK_SECRET` 一致。
+
+### 本地开发
+
+在本地启动 Cinna 后，可使用以下命令手动触发通知：
+
+```bash
+curl --request POST http://localhost:8080/internal/daily-notification \
+  --header "X-Cinna-Webhook-Secret: $WEBHOOK_SECRET"
+```
+
+### 使用 Google Cloud Scheduler 的生产环境
+
+创建一个 Cloud Scheduler HTTP 任务，调用已部署服务的公开 URL。请根据期望的
+通知发送时间配置执行计划和时区：
+
+```bash
+gcloud scheduler jobs create http cinna-daily-notification \
+  --location="$REGION" \
+  --schedule="0 9 * * *" \
+  --time-zone="America/Los_Angeles" \
+  --uri="https://your-service-url/internal/daily-notification" \
+  --http-method=POST \
+  --headers="X-Cinna-Webhook-Secret=$WEBHOOK_SECRET"
+```
+
+上述示例会在 `America/Los_Angeles` 时区每天 09:00 执行。请按需替换时区、
+执行计划和服务 URL。Scheduler 任务配置中包含请求头，因此请使用专用的
+`WEBHOOK_SECRET`，并限制能够查看或管理该任务的用户权限。
+
 ## 容器镜像
 
 多阶段 `Dockerfile` 会构建静态链接的 Linux `amd64` 二进制文件，并将其复制到精简的 Alpine 运行时镜像中。可在本地构建：
