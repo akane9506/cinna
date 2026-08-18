@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
@@ -52,20 +53,13 @@ func (c *Client) handleUpdate(ctx context.Context, b *bot.Bot, update *models.Up
 // handle voice input
 func (c *Client) handleVoice(ctx context.Context, b *bot.Bot, update *models.Update) {
 	logger := c.logger.With("path", "internal/app/telegram/handlers_internal/handleVoice")
+	chatID := update.Message.Chat.ID
 	voiceFileID := update.Message.Voice.FileID
 	// get voice file from telegram
 	voiceFile, err := getUserVoice(ctx, b, voiceFileID)
 	if err != nil {
 		logger.Error("error processing user voice", "error", err)
-		_, err := c.bot.SendMessage(
-			ctx,
-			&bot.SendMessageParams{ChatID: update.Message.Chat.ID, Text: "Failed to get voice"},
-		)
-		if err != nil {
-			logger.Error("error sending message to user",
-				"chat_id", update.Message.Chat.ID, "error", err,
-			)
-		}
+		c.sendPlainReply(ctx, b, chatID, "Fail to get voice file", logger)
 		return
 	}
 	defer func() {
@@ -76,11 +70,10 @@ func (c *Client) handleVoice(ctx context.Context, b *bot.Bot, update *models.Upd
 	text, err := c.agentHandler.HandleAudio(ctx, voiceFile)
 	if err != nil {
 		logger.Error("failed to transcribe audio", "error", err)
+		c.sendPlainReply(ctx, b, chatID, "failed to transcribe audio", logger)
+		return
 	}
-	c.bot.SendMessage(
-		ctx,
-		&bot.SendMessageParams{ChatID: update.Message.Chat.ID, Text: "recognized content: " + text},
-	)
+	c.sendPlainReply(ctx, b, chatID, "recognized content: "+text, logger)
 }
 
 // handle /-based commands
@@ -97,7 +90,7 @@ func (c *Client) handleCommands(
 	}
 	command, args := parseCommandAndArgs(update.Message.Text)
 	if slices.Contains(adminCommands, command) && !isAdmin {
-		c.sendCommandReply(
+		c.sendHTMLReply(
 			ctx,
 			b,
 			update.Message.Chat.ID,
@@ -119,24 +112,7 @@ func (c *Client) handleCommands(
 	default:
 		replyMessage = "❌ <b>Unknown command</b>\n\nUse /help to view the available commands."
 	}
-	c.sendCommandReply(ctx, b, update.Message.Chat.ID, replyMessage)
-}
-
-// send message with to the given chat
-func (c *Client) sendCommandReply(
-	ctx context.Context,
-	b *bot.Bot,
-	chatID int64,
-	text string,
-) {
-	_, err := b.SendMessage(ctx, &bot.SendMessageParams{
-		ChatID:    chatID,
-		Text:      text,
-		ParseMode: models.ParseModeHTML,
-	})
-	if err != nil {
-		c.logger.Error("failed to send command reply", "chat_id", chatID, "error", err)
-	}
+	c.sendHTMLReply(ctx, b, update.Message.Chat.ID, replyMessage)
 }
 
 // interface to help test the function. Directly pass *bot.Bot to the function
@@ -256,6 +232,40 @@ func (c *Client) handleText(ctx context.Context, b *bot.Bot, update *models.Upda
 	close(typingDone)
 }
 
+// send HTML formatted message to the given chat
+func (c *Client) sendHTMLReply(
+	ctx context.Context,
+	b *bot.Bot,
+	chatID int64,
+	text string,
+) {
+	_, err := b.SendMessage(ctx, &bot.SendMessageParams{
+		ChatID:    chatID,
+		Text:      text,
+		ParseMode: models.ParseModeHTML,
+	})
+	if err != nil {
+		c.logger.Error("failed to send command reply", "chat_id", chatID, "error", err)
+	}
+}
+
+// send plain text reply to the given chat
+func (c *Client) sendPlainReply(
+	ctx context.Context,
+	b *bot.Bot,
+	chatID int64,
+	text string,
+	logger *slog.Logger,
+) {
+	_, err := b.SendMessage(ctx, &bot.SendMessageParams{
+		ChatID: chatID,
+		Text:   text,
+	})
+	if err != nil {
+		logger.Error("failed to send reply", "telegram_user_id", chatID, "error", err)
+	}
+}
+
 // ========== helper functions =========
 
 // check if the trimmed text starts with '/'
@@ -331,7 +341,7 @@ func getUserVoice(ctx context.Context, b *bot.Bot, fileID string) (*os.File, err
 	if err != nil {
 		var urlError *url.Error
 		if errors.As(err, &urlError) {
-			return nil, fmt.Errorf("failed to download voice file: %w", err)
+			return nil, fmt.Errorf("failed to download voice file: %w", urlError.Err)
 		}
 		return nil, errors.New("failed to download voice file")
 	}
@@ -346,8 +356,7 @@ func getUserVoice(ctx context.Context, b *bot.Bot, fileID string) (*os.File, err
 	oggFile, err := os.CreateTemp("", "telegram-voice-*.ogg")
 	if err != nil {
 		return nil, fmt.Errorf(
-			"failed to create temp ogg file %q: %w",
-			oggFile.Name(),
+			"failed to create temp ogg file: %w",
 			err,
 		)
 	}
