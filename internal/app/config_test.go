@@ -9,6 +9,7 @@ import (
 
 var mockDBUrl string = "postgres://a:a_pswrd@localhost:5432/cinna"
 var mockDeepseekAPIKey string = "deepseek_api_key"
+var mockOpenaiAPIKey string = "openai_api_key"
 var mockMessageEncKey = "key"
 var mockMessageEncKeyID = "abcdef"
 var mockTimezone = "America/Los_Angeles"
@@ -20,6 +21,7 @@ func TestLoadConfig(t *testing.T) {
 		telegramEnv                string
 		dbUrlEnv                   string
 		deepseekAPIEnv             string
+		openaiAPIEnv               string
 		webhookUrlEnv              string
 		webhookSecretEnv           string
 		messageEncKeyID            string
@@ -40,6 +42,7 @@ func TestLoadConfig(t *testing.T) {
 			telegramEnv:      "abc",
 			dbUrlEnv:         mockDBUrl,
 			deepseekAPIEnv:   mockDeepseekAPIKey,
+			openaiAPIEnv:     mockOpenaiAPIKey,
 			messageEncKeyID:  mockMessageEncKeyID,
 			messageEncKey:    mockMessageEncKey,
 			webhookSecretEnv: "secret",
@@ -48,6 +51,7 @@ func TestLoadConfig(t *testing.T) {
 				TelegramBotToken:       "abc",
 				DatabaseURL:            mockDBUrl,
 				DeepseekAPIKey:         mockDeepseekAPIKey,
+				OpenaiAPIKey:           mockOpenaiAPIKey,
 				RuntimeEnv:             "development",
 				WebhookSecret:          "secret",
 				MessageEncryptionKeyID: mockMessageEncKeyID,
@@ -61,6 +65,7 @@ func TestLoadConfig(t *testing.T) {
 			telegramEnv:      "abc",
 			dbUrlEnv:         mockDBUrl,
 			deepseekAPIEnv:   mockDeepseekAPIKey,
+			openaiAPIEnv:     mockOpenaiAPIKey,
 			messageEncKeyID:  mockMessageEncKeyID,
 			messageEncKey:    mockMessageEncKey,
 			webhookUrlEnv:    "https://localhost",
@@ -71,6 +76,7 @@ func TestLoadConfig(t *testing.T) {
 				RuntimeEnv:             "production",
 				DatabaseURL:            mockDBUrl,
 				DeepseekAPIKey:         mockDeepseekAPIKey,
+				OpenaiAPIKey:           mockOpenaiAPIKey,
 				WebhookURL:             "https://localhost",
 				WebhookSecret:          "secret",
 				MessageEncryptionKeyID: mockMessageEncKeyID,
@@ -171,7 +177,8 @@ func TestLoadConfig(t *testing.T) {
 			t.Setenv(webhookURLEnv, tt.webhookUrlEnv)
 			t.Setenv(webhookSecretEnv, tt.webhookSecretEnv)
 			t.Setenv(dbURLEnv, tt.dbUrlEnv)
-			t.Setenv(deepseekEnv, tt.deepseekAPIEnv)
+			t.Setenv(deepseekKeyEnv, tt.deepseekAPIEnv)
+			t.Setenv(openaiKeyEnv, tt.openaiAPIEnv)
 			t.Setenv(messageEncryptionKeyEnv, tt.messageEncKey)
 			t.Setenv(messageEncryptionKeyIDEnv, tt.messageEncKeyID)
 			t.Setenv(appTimezoneEnv, tt.appTimezone)
