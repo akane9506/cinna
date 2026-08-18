@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/akane9506/cinna/internal/app/ports"
@@ -16,6 +17,10 @@ type AgentHandler interface {
 		userID int64,
 		messageTime time.Time,
 		text string,
+	) (string, error)
+	HandleAudio(
+		ctx context.Context,
+		file *os.File,
 	) (string, error)
 }
 

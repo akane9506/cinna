@@ -8,15 +8,17 @@ import (
 	"github.com/akane9506/cinna/internal/app"
 	"github.com/akane9506/cinna/internal/app/agent/core"
 	"github.com/akane9506/cinna/internal/app/agent/memory"
+	"github.com/akane9506/cinna/internal/app/agent/transcriber"
 	"github.com/akane9506/cinna/internal/app/ports"
 	"github.com/cloudwego/eino/compose"
 )
 
 type CinnaReactAgent struct {
-	core   *core.AgentCore
-	runner compose.Runnable[*core.GraphInput, *core.GraphOutput]
-	store  *memory.MemoryStore
-	logger *slog.Logger
+	core        *core.AgentCore
+	runner      compose.Runnable[*core.GraphInput, *core.GraphOutput]
+	store       *memory.MemoryStore
+	transcriber *transcriber.VoiceTranscriber
+	logger      *slog.Logger
 }
 
 // Create a new agent with graph and runner built
@@ -33,6 +35,7 @@ func NewCinnaReactAgent(
 	agent.logger = logger
 	agent.core = core
 	agent.store = memory.NewMemoryStore(repos.AgentMemory, logger)
+	agent.transcriber = transcriber.NewTranscriber(config)
 	// compile graph and create a runner
 	runner, err := core.BuildGraph(ctx)
 	if err != nil {

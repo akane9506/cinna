@@ -114,6 +114,7 @@ TELEGRAM_BOT_TOKEN=your_telegram_bot_token
 APP_TIMEZONE=America/Los_Angeles
 DATABASE_URL=postgres://cinna:change_me@localhost:5432/cinna?sslmode=disable
 DEEPSEEK_API_KEY=your_deepseek_api_key
+OPENAI_API_KEY=your_openai_api_key
 MESSAGE_ENCRYPTION_KEY=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
 MESSAGE_ENCRYPTION_KEY_ID=local-v1
 POSTGRES_USER=cinna

@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/akane9506/cinna/internal/app/agent/core"
@@ -55,4 +56,11 @@ func (a *CinnaReactAgent) HandleText(
 		a.store.UpdateChatHistory(ctx, userID, result.ChatHistory)
 	}
 	return result.OutputMessage.Content, nil
+}
+
+func (a *CinnaReactAgent) HandleAudio(
+	ctx context.Context,
+	file *os.File,
+) (string, error) {
+	return a.transcriber.Transcribe(ctx, file)
 }

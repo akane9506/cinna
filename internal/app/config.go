@@ -15,7 +15,8 @@ const (
 	webhookSecretEnv    = "WEBHOOK_SECRET"
 	dbURLEnv            = "DATABASE_URL"
 	// LLM key
-	deepseekEnv = "DEEPSEEK_API_KEY"
+	deepseekKeyEnv = "DEEPSEEK_API_KEY"
+	openaiKeyEnv   = "OPENAI_API_KEY"
 	// Encryption key
 	messageEncryptionKeyIDEnv = "MESSAGE_ENCRYPTION_KEY_ID"
 	messageEncryptionKeyEnv   = "MESSAGE_ENCRYPTION_KEY"
@@ -35,6 +36,7 @@ type Config struct {
 	WebhookSecret          string
 	DatabaseURL            string
 	DeepseekAPIKey         string
+	OpenaiAPIKey           string
 	MessageEncryptionKeyID string
 	MessageEncryptionKey   string
 	AppTimezone            string
@@ -84,8 +86,10 @@ func LoadConfig() (*Config, error) {
 	config.WebhookSecret = webhookSecret
 
 	// setup LLM API keys
-	deepseekAPIKey := strings.TrimSpace(os.Getenv(deepseekEnv))
+	deepseekAPIKey := strings.TrimSpace(os.Getenv(deepseekKeyEnv))
 	config.DeepseekAPIKey = deepseekAPIKey
+	openaiAPIKey := strings.TrimSpace(os.Getenv(openaiKeyEnv))
+	config.OpenaiAPIKey = openaiAPIKey
 
 	// setup encryption params
 	messageEncryptionKey := strings.TrimSpace(os.Getenv(messageEncryptionKeyEnv))

@@ -7,6 +7,12 @@ import (
 	"database/sql"
 	_ "embed"
 	"errors"
+	"fmt"
+	"io"
+	"log/slog"
+	"net/http"
+	"net/url"
+	"os"
 	"slices"
 	"strconv"
 	"strings"
@@ -15,6 +21,11 @@ import (
 	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
 )
+
+// this client is for getting user's voice message
+var telegramVoiceHTTPClient = &http.Client{
+	Timeout: 30 * time.Second,
+}
 
 //go:embed command_list.md
 var commandDoc string
@@ -29,12 +40,40 @@ func (c *Client) handleUpdate(ctx context.Context, b *bot.Bot, update *models.Up
 	if update.Message == nil {
 		return
 	}
-	if isCommand(update.Message.Text) {
+	switch {
+	case isCommand(update.Message.Text):
 		c.handleCommands(ctx, b, update)
-		return
-	} else {
+	case update.Message.Voice != nil:
+		c.handleVoice(ctx, b, update)
+	default:
 		c.handleText(ctx, b, update)
 	}
+}
+
+// handle voice input
+func (c *Client) handleVoice(ctx context.Context, b *bot.Bot, update *models.Update) {
+	logger := c.logger.With("path", "internal/app/telegram/handlers_internal/handleVoice")
+	chatID := update.Message.Chat.ID
+	voiceFileID := update.Message.Voice.FileID
+	// get voice file from telegram
+	voiceFile, err := getUserVoice(ctx, b, voiceFileID)
+	if err != nil {
+		logger.Error("error processing user voice", "error", err)
+		c.sendPlainReply(ctx, b, chatID, "Fail to get voice file", logger)
+		return
+	}
+	defer func() {
+		// don't forget to close and delete the file
+		voiceFile.Close()
+		os.Remove(voiceFile.Name())
+	}()
+	text, err := c.agentHandler.HandleAudio(ctx, voiceFile)
+	if err != nil {
+		logger.Error("failed to transcribe audio", "error", err)
+		c.sendPlainReply(ctx, b, chatID, "failed to transcribe audio", logger)
+		return
+	}
+	c.sendPlainReply(ctx, b, chatID, "recognized content: "+text, logger)
 }
 
 // handle /-based commands
@@ -51,7 +90,7 @@ func (c *Client) handleCommands(
 	}
 	command, args := parseCommandAndArgs(update.Message.Text)
 	if slices.Contains(adminCommands, command) && !isAdmin {
-		c.sendCommandReply(
+		c.sendHTMLReply(
 			ctx,
 			b,
 			update.Message.Chat.ID,
@@ -73,23 +112,7 @@ func (c *Client) handleCommands(
 	default:
 		replyMessage = "❌ <b>Unknown command</b>\n\nUse /help to view the available commands."
 	}
-	c.sendCommandReply(ctx, b, update.Message.Chat.ID, replyMessage)
-}
-
-func (c *Client) sendCommandReply(
-	ctx context.Context,
-	b *bot.Bot,
-	chatID int64,
-	text string,
-) {
-	_, err := b.SendMessage(ctx, &bot.SendMessageParams{
-		ChatID:    chatID,
-		Text:      text,
-		ParseMode: models.ParseModeHTML,
-	})
-	if err != nil {
-		c.logger.Error("failed to send command reply", "chat_id", chatID, "error", err)
-	}
+	c.sendHTMLReply(ctx, b, update.Message.Chat.ID, replyMessage)
 }
 
 // interface to help test the function. Directly pass *bot.Bot to the function
@@ -209,6 +232,40 @@ func (c *Client) handleText(ctx context.Context, b *bot.Bot, update *models.Upda
 	close(typingDone)
 }
 
+// send HTML formatted message to the given chat
+func (c *Client) sendHTMLReply(
+	ctx context.Context,
+	b *bot.Bot,
+	chatID int64,
+	text string,
+) {
+	_, err := b.SendMessage(ctx, &bot.SendMessageParams{
+		ChatID:    chatID,
+		Text:      text,
+		ParseMode: models.ParseModeHTML,
+	})
+	if err != nil {
+		c.logger.Error("failed to send command reply", "chat_id", chatID, "error", err)
+	}
+}
+
+// send plain text reply to the given chat
+func (c *Client) sendPlainReply(
+	ctx context.Context,
+	b *bot.Bot,
+	chatID int64,
+	text string,
+	logger *slog.Logger,
+) {
+	_, err := b.SendMessage(ctx, &bot.SendMessageParams{
+		ChatID: chatID,
+		Text:   text,
+	})
+	if err != nil {
+		logger.Error("failed to send reply", "telegram_user_id", chatID, "error", err)
+	}
+}
+
 // ========== helper functions =========
 
 // check if the trimmed text starts with '/'
@@ -256,4 +313,73 @@ func setTypingAction(ctx context.Context, b *bot.Bot, update *models.Update) cha
 		}
 	}()
 	return typingDone
+}
+
+// get telegram voice message file
+// we don't really limit the file size at this time, because user's voice message is usually small
+func getUserVoice(ctx context.Context, b *bot.Bot, fileID string) (*os.File, error) {
+	// step 1: get file url from telegram
+	voiceFile, err := b.GetFile(ctx, &bot.GetFileParams{
+		FileID: fileID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get voice file: %w", err)
+	}
+	if voiceFile.FilePath == "" {
+		return nil, errors.New("telegram returns an empty file path")
+	}
+	request, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodGet,
+		b.FileDownloadLink(voiceFile),
+		nil,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create telegram voice download request: %w", err)
+	}
+	response, err := telegramVoiceHTTPClient.Do(request)
+	if err != nil {
+		var urlError *url.Error
+		if errors.As(err, &urlError) {
+			return nil, fmt.Errorf("failed to download voice file: %w", urlError.Err)
+		}
+		return nil, errors.New("failed to download voice file")
+	}
+	defer response.Body.Close()
+	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
+		return nil, fmt.Errorf(
+			"telegram file download returned status %d",
+			response.StatusCode,
+		)
+	}
+	// step 2: save audio buffer to .ogg file
+	oggFile, err := os.CreateTemp("", "telegram-voice-*.ogg")
+	if err != nil {
+		return nil, fmt.Errorf(
+			"failed to create temp ogg file: %w",
+			err,
+		)
+	}
+	cleanUp := func() {
+		oggFile.Close()
+		os.Remove(oggFile.Name())
+	}
+	if _, err = io.Copy(oggFile, response.Body); err != nil {
+		cleanUp()
+		return nil, fmt.Errorf(
+			"failed to save audio to temp ogg file %q: %w",
+			oggFile.Name(),
+			err,
+		)
+	}
+	// step 3: rewind file to the audio start position (time 0)
+	if _, err = oggFile.Seek(0, io.SeekStart); err != nil {
+		cleanUp()
+		return nil, fmt.Errorf(
+			"failed to rewind temp ogg file %q: %w",
+			oggFile.Name(),
+			err,
+		)
+	}
+	return oggFile, nil
 }
