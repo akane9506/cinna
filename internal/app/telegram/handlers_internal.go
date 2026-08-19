@@ -171,7 +171,7 @@ func (c *Client) handleText(ctx context.Context, b *bot.Bot, update *models.Upda
 	}
 	logger := c.logger.With("path", "internal/telegram/handlers/handleText")
 	typingChan := setActionStatus(ctx, b, update, models.ChatActionTyping)
-	err := c.sendAgentReply(ctx, b, update.Message.From.ID, update.Message.Text)
+	err := c.sendAgentReply(ctx, b, update.Message.Chat.ID, update.Message.Text)
 	if err != nil {
 		logger.Error("error handling text message", "error", err)
 	}
@@ -187,6 +187,7 @@ func (c *Client) handleVoice(ctx context.Context, b *bot.Bot, update *models.Upd
 	voiceChan := setActionStatus(ctx, b, update, models.ChatActionUploadVoice)
 	voiceFile, err := getUserVoice(ctx, b, voiceFileID)
 	if err != nil {
+		close(voiceChan)
 		logger.Error("error processing user voice", "error", err)
 		c.sendPlainReply(ctx, b, chatID, "Fail to get voice file", logger)
 		return
@@ -214,13 +215,13 @@ func (c *Client) handleVoice(ctx context.Context, b *bot.Bot, update *models.Upd
 
 // generate agent reply and send message
 func (c *Client) sendAgentReply(
-	ctx context.Context, b *bot.Bot, userID int64, message string) error {
+	ctx context.Context, b *bot.Bot, chatID int64, message string) error {
 	loc, _ := time.LoadLocation(c.timezone) // config has already verified timezone loading
 	now := time.Now().In(loc)
-	reply, err := c.agentHandler.HandleText(ctx, userID, now, message)
+	reply, err := c.agentHandler.HandleText(ctx, chatID, now, message)
 	if err != nil {
 		if _, errInner := b.SendMessage(ctx, &bot.SendMessageParams{
-			ChatID: userID,
+			ChatID: chatID,
 			Text:   "internal server error",
 		}); errInner != nil {
 			return fmt.Errorf("failed to get reply from agent: %w; failed to get reply from agent: %w",
@@ -229,7 +230,7 @@ func (c *Client) sendAgentReply(
 		return fmt.Errorf("failed to get reply from agent: %w", err)
 	}
 	_, err = b.SendMessage(ctx, &bot.SendMessageParams{
-		ChatID: userID,
+		ChatID: chatID,
 		Text:   reply,
 	})
 	if err != nil {
