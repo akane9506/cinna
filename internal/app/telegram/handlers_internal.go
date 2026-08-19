@@ -50,32 +50,6 @@ func (c *Client) handleUpdate(ctx context.Context, b *bot.Bot, update *models.Up
 	}
 }
 
-// handle voice input
-func (c *Client) handleVoice(ctx context.Context, b *bot.Bot, update *models.Update) {
-	logger := c.logger.With("path", "internal/app/telegram/handlers_internal/handleVoice")
-	chatID := update.Message.Chat.ID
-	voiceFileID := update.Message.Voice.FileID
-	// get voice file from telegram
-	voiceFile, err := getUserVoice(ctx, b, voiceFileID)
-	if err != nil {
-		logger.Error("error processing user voice", "error", err)
-		c.sendPlainReply(ctx, b, chatID, "Fail to get voice file", logger)
-		return
-	}
-	defer func() {
-		// don't forget to close and delete the file
-		voiceFile.Close()
-		os.Remove(voiceFile.Name())
-	}()
-	text, err := c.agentHandler.HandleAudio(ctx, voiceFile)
-	if err != nil {
-		logger.Error("failed to transcribe audio", "error", err)
-		c.sendPlainReply(ctx, b, chatID, "failed to transcribe audio", logger)
-		return
-	}
-	c.sendPlainReply(ctx, b, chatID, "recognized content: "+text, logger)
-}
-
 // handle /-based commands
 func (c *Client) handleCommands(
 	ctx context.Context, b *bot.Bot, update *models.Update) {
@@ -196,40 +170,73 @@ func (c *Client) handleText(ctx context.Context, b *bot.Bot, update *models.Upda
 		return
 	}
 	logger := c.logger.With("path", "internal/telegram/handlers/handleText")
-	typingDone := setTypingAction(ctx, b, update)
-	loc, _ := time.LoadLocation(c.timezone) // config has already verified timezone loading
-	now := time.Now().In(loc)
-	reply, err := c.agentHandler.HandleText(
-		ctx,
-		update.Message.From.ID,
-		now,
-		update.Message.Text,
-	)
+	typingChan := setActionStatus(ctx, b, update, models.ChatActionTyping)
+	err := c.sendAgentReply(ctx, b, update.Message.Chat.ID, update.Message.Text)
 	if err != nil {
-		logger.Error(
-			"failed to get reply from agent",
-			"user_id", update.Message.From.ID,
-			"error", err,
-		)
-		b.SendMessage(ctx, &bot.SendMessageParams{
-			ChatID: update.Message.Chat.ID,
-			Text:   "internal server error",
-		})
-		close(typingDone)
+		logger.Error("error handling text message", "error", err)
+	}
+	close(typingChan)
+}
+
+// handle voice input
+func (c *Client) handleVoice(ctx context.Context, b *bot.Bot, update *models.Update) {
+	logger := c.logger.With("path", "internal/app/telegram/handlers_internal/handleVoice")
+	chatID := update.Message.Chat.ID
+	voiceFileID := update.Message.Voice.FileID
+	// get voice file from telegram
+	voiceChan := setActionStatus(ctx, b, update, models.ChatActionUploadVoice)
+	voiceFile, err := getUserVoice(ctx, b, voiceFileID)
+	if err != nil {
+		close(voiceChan)
+		logger.Error("error processing user voice", "error", err)
+		c.sendPlainReply(ctx, b, chatID, "Fail to get voice file", logger)
 		return
 	}
+	defer func() {
+		// don't forget to close and delete the file
+		voiceFile.Close()
+		os.Remove(voiceFile.Name())
+	}()
+	text, err := c.agentHandler.HandleAudio(ctx, voiceFile)
+	close(voiceChan)
+	if err != nil {
+		logger.Error("failed to transcribe audio", "error", err)
+		c.sendPlainReply(ctx, b, chatID, "failed to transcribe audio", logger)
+		return
+	}
+	// generate and send agent reply
+	typingChan := setActionStatus(ctx, b, update, models.ChatActionTyping)
+	err = c.sendAgentReply(ctx, b, chatID, text)
+	if err != nil {
+		logger.Error("error handling text message", "error", err)
+	}
+	close(typingChan)
+}
+
+// generate agent reply and send message
+func (c *Client) sendAgentReply(
+	ctx context.Context, b *bot.Bot, chatID int64, message string) error {
+	loc, _ := time.LoadLocation(c.timezone) // config has already verified timezone loading
+	now := time.Now().In(loc)
+	reply, err := c.agentHandler.HandleText(ctx, chatID, now, message)
+	if err != nil {
+		if _, errInner := b.SendMessage(ctx, &bot.SendMessageParams{
+			ChatID: chatID,
+			Text:   "internal server error",
+		}); errInner != nil {
+			return fmt.Errorf("failed to get reply from agent: %w; failed to get reply from agent: %w",
+				err, errInner)
+		}
+		return fmt.Errorf("failed to get reply from agent: %w", err)
+	}
 	_, err = b.SendMessage(ctx, &bot.SendMessageParams{
-		ChatID: update.Message.Chat.ID,
+		ChatID: chatID,
 		Text:   reply,
 	})
 	if err != nil {
-		logger.Error(
-			"failed to send telegram response",
-			"chat_id", update.Message.Chat.ID,
-			"error", err,
-		)
+		return fmt.Errorf("failed to send telegram response: %w", err)
 	}
-	close(typingDone)
+	return nil
 }
 
 // send HTML formatted message to the given chat
@@ -288,31 +295,36 @@ func parseCommandAndArgs(text string) (string, []string) {
 }
 
 // persist the status typing when the bot is processing the message
-func setTypingAction(ctx context.Context, b *bot.Bot, update *models.Update) chan struct{} {
-	typingDone := make(chan struct{})
+func setActionStatus(
+	ctx context.Context,
+	b *bot.Bot,
+	update *models.Update,
+	action models.ChatAction,
+) chan struct{} {
+	statusChan := make(chan struct{})
 	go func() {
 		ticker := time.NewTicker(4 * time.Second)
 		defer ticker.Stop()
 
-		sendTyping := func() {
+		sendStatus := func() {
 			b.SendChatAction(ctx, &bot.SendChatActionParams{
 				ChatID: update.Message.Chat.ID,
-				Action: models.ChatActionTyping,
+				Action: action,
 			})
 		}
-		sendTyping()
+		sendStatus()
 		for {
 			select {
-			case <-typingDone:
+			case <-statusChan:
 				return
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				sendTyping()
+				sendStatus()
 			}
 		}
 	}()
-	return typingDone
+	return statusChan
 }
 
 // get telegram voice message file
