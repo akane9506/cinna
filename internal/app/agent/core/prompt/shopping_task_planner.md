@@ -160,7 +160,7 @@ JSON 格式：
 {
 "id": "8",
 "method": "REMOVE",
-"category": "pet_store",
+"category": "pet",
 "name": "猫砂(cat litter)"
 }
 ]
