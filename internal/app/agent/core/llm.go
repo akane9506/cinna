@@ -115,7 +115,7 @@ func GetOpenAICacheOptions(nodePaths []*compose.NodePath, telegramUserID int64) 
 			"%d_node_%s",
 			telegramUserID,
 			strings.Join(path.GetPath(), "_"))
-		opt := compose.WithChatModelOption(deepseek.WithExtraFields(map[string]interface{}{
+		opt := compose.WithChatModelOption(openai.WithExtraFields(map[string]interface{}{
 			"prompt_cache_key": isolationID,
 		})).DesignateNodeWithPath(path)
 		opts = append(opts, opt)
