@@ -2,22 +2,27 @@ package core
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"testing"
 
 	"github.com/akane9506/cinna/internal/app"
 	"github.com/akane9506/cinna/internal/utils"
+	"github.com/cloudwego/eino-ext/libs/acl/openai"
 	"github.com/cloudwego/eino/compose"
 	"github.com/cloudwego/eino/schema"
+	"github.com/eino-contrib/jsonschema"
 	"github.com/stretchr/testify/assert"
+	orderedmap "github.com/wk8/go-ordered-map/v2"
 )
 
 const mockTelegramID = 123456
 
 func setupModels() *Models {
 	config, _ := app.LoadConfig()
-	apiKey := &APIKey{Deepseek: config.DeepseekAPIKey}
+	apiKey := &APIKey{Deepseek: config.DeepseekAPIKey, OpenAI: config.OpenaiAPIKey}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	models := NewLLMModels(apiKey, logger)
 	return models
@@ -102,38 +107,64 @@ func TestDeepSeekFlashChatModelManual(t *testing.T) {
 	t.Log(resp.Content)
 }
 
-// func TestDeepSeekFlashJSONModelManual(t *testing.T) {
-// 	utils.EnforceManualTest(t)
-// 	ctx := context.Background()
-// 	models := setupModels()
-// 	JSONModel, err := models.CreateDeepseekFlashJSONModel(ctx)
-// 	if err != nil {
-// 		t.Fatal(err)
-// 	}
-// 	resp, err := JSONModel.Generate(ctx, []*schema.Message{
-// 		schema.SystemMessage(`
-// 	The user will provide some exam text. please answer the question.
+func TestJSONModelManual(t *testing.T) {
+	utils.EnforceManualTest(t)
+	ctx := context.Background()
+	models := setupModels()
+	structuredSchema := &jsonschema.Schema{
+		Type: string(schema.Object),
+		Properties: orderedmap.New[string, *jsonschema.Schema](
+			orderedmap.WithInitialData[string, *jsonschema.Schema](
+				orderedmap.Pair[string, *jsonschema.Schema]{
+					Key: "question",
+					Value: &jsonschema.Schema{
+						Type: string(schema.String),
+					},
+				},
+				orderedmap.Pair[string, *jsonschema.Schema]{
+					Key: "answer",
+					Value: &jsonschema.Schema{
+						Type: string(schema.String),
+					},
+				},
+			),
+		),
+		Required:             []string{"question", "answer"},
+		AdditionalProperties: jsonschema.FalseSchema,
+	}
+	JSONModel, err := models.CreateJSONModel(ctx, &openai.ChatCompletionResponseFormatJSONSchema{
+		Name:        "QA",
+		Description: "a test model for structured output",
+		Strict:      true,
+		JSONSchema:  structuredSchema,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := JSONModel.Generate(ctx, []*schema.Message{
+		schema.SystemMessage(`
+	The user will provide some exam text. please answer the question.
 
-// 	EXAMPLE INPUT:
-// 	Which is the highest mountain in the world? Mount Everest.
+	EXAMPLE INPUT:
+	Which is the highest mountain in the world? Mount Everest.
 
-// 	EXAMPLE JSON OUTPUT:
-// 	{
-// 	    "question": "Which is the highest mountain in the world?",
-// 	    "answer": "Mount Everest"
-// 	}`),
-// 		schema.UserMessage("What is a good way to create a graph agent?"),
-// 	})
-// 	if err != nil {
-// 		t.Fatal(err)
-// 	}
-// 	t.Log(resp.Role, resp.Content)
-// 	var parsedResponse struct {
-// 		Question string `json:"question"`
-// 		Answer   string `json:"answer"`
-// 	}
-// 	if err := json.Unmarshal([]byte(resp.Content), &parsedResponse); err != nil {
-// 		t.Fatal(err)
-// 	}
-// 	t.Log(fmt.Sprintf("%+v", parsedResponse))
-// }
+	EXAMPLE JSON OUTPUT:
+	{
+	    "question": "Which is the highest mountain in the world?",
+	    "answer": "Mount Everest"
+	}`),
+		schema.UserMessage("What is a good way to create a graph agent?"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Log(resp.Role, resp.Content)
+	var parsedResponse struct {
+		Question string `json:"question"`
+		Answer   string `json:"answer"`
+	}
+	if err := json.Unmarshal([]byte(resp.Content), &parsedResponse); err != nil {
+		t.Fatal(err)
+	}
+	t.Log(fmt.Sprintf("%+v", parsedResponse))
+}
