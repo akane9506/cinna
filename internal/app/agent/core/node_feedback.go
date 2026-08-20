@@ -10,8 +10,12 @@ import (
 	"strings"
 
 	"github.com/akane9506/cinna/internal/app/ports"
+	"github.com/cloudwego/eino-ext/components/model/openai"
+	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/compose"
 	"github.com/cloudwego/eino/schema"
+	"github.com/eino-contrib/jsonschema"
+	orderedmap "github.com/wk8/go-ordered-map/v2"
 )
 
 const (
@@ -22,9 +26,43 @@ const (
 
 var feedbacksExitNodeName string = preChatPassthroughNodeName
 
-func (a *AgentCore) RegisterFeedbacksWorkflow() {
+type FeedbackItems struct {
+	Items []string `json:"items"`
+}
+
+func createFeedbackItemsSchema() *openai.ChatCompletionResponseFormatJSONSchema {
+	schema := &jsonschema.Schema{
+		Type: string(schema.Object),
+		Properties: orderedmap.New[string, *jsonschema.Schema](
+			orderedmap.WithInitialData[string, *jsonschema.Schema](
+				orderedmap.Pair[string, *jsonschema.Schema]{
+					Key: "items",
+					Value: &jsonschema.Schema{
+						Type:  string(schema.Array),
+						Items: &jsonschema.Schema{Type: string(schema.String)},
+					},
+				},
+			),
+		),
+		Required:             []string{"items"},
+		AdditionalProperties: jsonschema.FalseSchema,
+	}
+	return &openai.ChatCompletionResponseFormatJSONSchema{
+		Name:        "feedback_items",
+		Description: "create feedback items",
+		Strict:      true,
+		JSONSchema:  schema,
+	}
+}
+
+func (a *AgentCore) RegisterFeedbacksWorkflow(ctx context.Context) {
+	logger := a.logger.With("path", "internal/app/agent/core/node_feedback/RegisterFeedbacksWorkflow")
+	model, err := a.models.CreateJSONModel(ctx, createFeedbackItemsSchema())
+	if err != nil {
+		logger.Error("failed to register feedbacks workflow")
+	}
 	addListFeedbackItemsLambda(a.graph, a.repos.Feedback, a.logger)
-	addFeedbacksPlanningNode(a.graph, a.jsonModel, a.prompts.FeedbacksPlanner)
+	addFeedbacksPlanningNode(a.graph, model, a.prompts.FeedbacksPlanner)
 	addUpdateFeedbacksLambdaNode(a.graph, a.repos.Feedback, a.logger)
 }
 
@@ -132,7 +170,7 @@ func feedbacksActionBranch(
 // ========= Feedbacks Planner ==========
 // Plan the task based the current feedbacks from the database and the user's message
 // in: []*schema.Message | out: *schema.Message
-func addFeedbacksPlanningNode(graph Graph, jsonModel JSONModel, prompt string) {
+func addFeedbacksPlanningNode(graph Graph, jsonModel model.BaseChatModel, prompt string) {
 	graph.AddChatModelNode(
 		feedbacksUpdatePlannerLLMNodeName,
 		jsonModel,
@@ -155,10 +193,6 @@ func prepareForFeedbacksPlanning(
 }
 
 // ========= Update Feedback Items Lambda ==========
-
-type FeedbackItems struct {
-	Items []string `json:"items"`
-}
 
 func addUpdateFeedbacksLambdaNode(
 	graph Graph,

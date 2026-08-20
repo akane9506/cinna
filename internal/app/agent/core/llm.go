@@ -6,9 +6,11 @@ import (
 	"log/slog"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/akane9506/cinna/internal/utils"
 	"github.com/cloudwego/eino-ext/components/model/deepseek"
+	"github.com/cloudwego/eino-ext/components/model/openai"
 	"github.com/cloudwego/eino/callbacks"
 	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/compose"
@@ -27,10 +29,12 @@ var (
 const (
 	deepseekBaseURL        = "https://api.deepseek.com"
 	deepseekFlashModelName = "deepseek-v4-flash"
+	gptModelName           = "gpt-5.6-luna"
 )
 
 type APIKey struct {
 	Deepseek string
+	OpenAI   string
 }
 
 type Models struct {
@@ -65,32 +69,29 @@ func (m *Models) CreateDeepseekFlashModel(ctx context.Context) (*deepseek.ChatMo
 	return deepseekFlashModel, deepseekFlashError
 }
 
-// This model is for the structured JSON output
-// Include the word "json" in the system or user prompt,
-// and provide an example of the desired JSON format to guide the model in outputting valid JSON.
-// https://api-docs.deepseek.com/guides/json_mode
-func (m *Models) CreateDeepseekFlashJSONModel(ctx context.Context) (*deepseek.ChatModel, error) {
-	deepseekFlashJSONOnce.Do(func() {
-		if m.apiKey.Deepseek == "" {
-			deepseekFlashJSONError = fmt.Errorf("DEEPSEEK_API_KEY is required for flash JSON model")
-			return
-		}
-		var err error
-		deepseekFlashJSONModel, err = deepseek.NewChatModel(ctx, &deepseek.ChatModelConfig{
-			APIKey:             m.apiKey.Deepseek,
-			BaseURL:            deepseekBaseURL,
-			Model:              deepseekFlashModelName,
-			ResponseFormatType: deepseek.ResponseFormatTypeJSONObject,
-		})
-		if err != nil {
-			deepseekFlashJSONError = fmt.Errorf("failed to start deepseek flash JSON model: %w", err)
-			return
-		}
+func (m *Models) CreateJSONModel(
+	ctx context.Context,
+	jsonSchema *openai.ChatCompletionResponseFormatJSONSchema) (*openai.ChatModel, error) {
+	apiKey := m.apiKey.OpenAI
+	if apiKey == "" {
+		return nil, fmt.Errorf("OPENAI_API_KEY is required for JSON model")
+	}
+	jsonModel, err := openai.NewChatModel(ctx, &openai.ChatModelConfig{
+		APIKey:  apiKey,
+		Model:   gptModelName,
+		Timeout: 1 * time.Minute,
+		ResponseFormat: &openai.ChatCompletionResponseFormat{
+			Type:       openai.ChatCompletionResponseFormatTypeJSONSchema,
+			JSONSchema: jsonSchema,
+		},
 	})
-	return deepseekFlashJSONModel, deepseekFlashJSONError
+	if err != nil {
+		return nil, fmt.Errorf("failed to create JSON model: %w", err)
+	}
+	return jsonModel, nil
 }
 
-// KV Cache isolation
+// KV Cache isolation - deepseek
 func GetDeepseekIsolationOptions(nodePaths []*compose.NodePath, telegramUserID int64) []compose.Option {
 	opts := []compose.Option{}
 	for _, path := range nodePaths {
@@ -100,6 +101,22 @@ func GetDeepseekIsolationOptions(nodePaths []*compose.NodePath, telegramUserID i
 			strings.Join(path.GetPath(), "_"))
 		opt := compose.WithChatModelOption(deepseek.WithExtraFields(map[string]interface{}{
 			"user_id": isolationID,
+		})).DesignateNodeWithPath(path)
+		opts = append(opts, opt)
+	}
+	return opts
+}
+
+// KV Cache isolation - openai
+func GetOpenAICacheOptions(nodePaths []*compose.NodePath, telegramUserID int64) []compose.Option {
+	opts := []compose.Option{}
+	for _, path := range nodePaths {
+		isolationID := fmt.Sprintf(
+			"%d_node_%s",
+			telegramUserID,
+			strings.Join(path.GetPath(), "_"))
+		opt := compose.WithChatModelOption(deepseek.WithExtraFields(map[string]interface{}{
+			"prompt_cache_key": isolationID,
 		})).DesignateNodeWithPath(path)
 		opts = append(opts, opt)
 	}

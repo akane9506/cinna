@@ -19,6 +19,7 @@ type CinnaReactAgent struct {
 	store       *memory.MemoryStore
 	transcriber *transcriber.VoiceTranscriber
 	logger      *slog.Logger
+	models      *core.Models
 }
 
 // Create a new agent with graph and runner built

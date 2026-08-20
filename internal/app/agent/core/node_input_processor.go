@@ -14,11 +14,6 @@ const (
 	processInputLambdaNodeName = "process_input"
 )
 
-type Intention struct {
-	Intent string `json:"intent"`
-	Action string `json:"action"`
-}
-
 func (a *AgentCore) RegisterInputProcessor() {
 	addProcessInputLambdaNode(a.graph)
 }
