@@ -96,7 +96,8 @@ Functions:
 - Docker
 - `sqlc`
 - A Telegram bot token
-- A DeepSeek API key
+- A DeepSeek API key (For response generation)
+- An OpenAI API key (For voice transcription and structured output)
 
 ## Configuration
 
@@ -345,4 +346,4 @@ go vet ./...
 
 Manual model and agent tests are guarded by `internal/utils.EnforceManualTest`.
 They are skipped unless `RUN_MANUAL_TEST=1` is set, and they require
-`DEEPSEEK_API_KEY`.
+`DEEPSEEK_API_KEY` and `OPENAI_API_KEY`.

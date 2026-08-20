@@ -21,34 +21,34 @@ Cinna 是一个基于 Go 和 Eino 构建、可自定义的 Telegram ReAct 智能
 
 ```mermaid
 flowchart LR
-    Start(["开始"]) --> InputProcessLambda["`**输入处理 Lambda**<br><br>*处理输入，并将必要信息存入状态*<br><br>输入：*GraphInput<br>输出：[]*schema.Message`"]
-    InputProcessLambda --> IntentClassifier["`**意图分类**<br><br>*识别用户意图和可能的操作*<br><br>输入：[]*schema.Message<br>输出：*schema.Message*`"]
-    IntentClassifier --> IntentLambda["`**意图验证 Lambda**<br><br>*验证意图分类结果，并将意图传递给分支节点*<br><br>输入：*schema.Message<br>输出：[]*schema.Message`"]
-    IntentLambda --> IntentRouter["`**按意图分支**<br>意图：<br>SHOPPING | FEEDBACK | OTHER<br>`"]
-    IntentRouter -- SHOPPING --> ListLambda["**列表 Lambda**<br><br>*读取购物清单中的内容，并标记过期条目和类别*<br><br>输入：[]*schema.Message<br>输出：[]*schema.Message"]
-    ListLambda --> ActionRouter["`**按操作类型分支**<br>操作：<br>LIST | UPDATE | None<br>`"]
-    ActionRouter -->|UPDATE| ShoppingPlanner["`**购物清单规划器**<br><br>*读取用户与 Cinna 的对话历史，并决定购物清单数据库操作；结果不会保存至历史状态*<br><br>输入：[]*schema.Message<br>输出：*schema.Message`"]
-    ActionRouter -- LIST --> Passthrough(["透传节点"])
-    ShoppingPlanner --> UpdateShoppingListLambda["`**更新购物清单 Lambda**<br><br>*将规划器输出解析为命令数组，并执行数据库更新*<br><br>输入：*schema.Message<br>输出：[]*schema.Message`"]
-    IntentRouter -- FEEDBACK --> FeedbackListLambda["`**读取反馈 Lambda**<br><br>*为反馈规划器准备待处理和进行中的任务*<br><br>输入：[]*schema.Message<br>输出：[]*schema.Message`"]
-    FeedbackActionRouter["**按操作类型分支**<br>操作：<br>List | UPDATE | NONE"] -->|"NONE | LIST（反馈不支持 LIST 命令）"| Passthrough
+    Start(["START"]) --> InputProcessLambda["`**Input Process Lambda**<br><br>*Process input and store necessary info in the state*<br><br> In: *GraphInput<br>Out: []*schema.Message`"]
+    InputProcessLambda --> IntentClassifier["`**Intent Classification**<br><br>*classifies user intention and possible action*<br><br>In: []*schema.Message<br>Out: *schema.Message*`"]
+    IntentClassifier --> IntentLambda["`**Intent Validation Lambda**<br><br>*Validates intent classificaion node output, and feed intention to the output branching*<br><br>In: *schema.Message<br>Out: []*schema.Message`"]
+    IntentLambda --> IntentRouter["`**Branch by Intent**<br>Intent:<br>SHOPPING | FEEDBACK | OTHER<br>`"]
+    IntentRouter -- SHOPPING --> ListLambda["<b>List Lambda</b><br><br><i>List contents in the shopping list table <br>(note: 1 - list expired items, 2: items are with categories, notify cinna to responde with the corresponding category)</i><br><br>In: []*schema.Message<br>Out: []*schema.Message"]
+    ListLambda --> ActionRouter["`**Branch by Action Type**<br>Action:<br>LIST | UPDATE | None<br>`"]
+    ActionRouter -->|UPDATE| ShoppingPlanner["`**Shopping Planner**<br>(we don't save this output into history state)<br><br>*Reads user-cinna chat history and decide the Shopping DB operation*<br><br>In: []*schema.Message<br>Out: *schema.Message`"]
+    ActionRouter -- LIST --> Passthrough(["Passthrough Node"])
+    ShoppingPlanner --> UpdateShoppingListLambda["`**Update Shopping List Lambda**<br><br>Parse the output from the planner into an array of commands, then execute commands to update the DB shopping list<br><br>In:*schema.Message<br>out: []*schema.Message`"]
+    IntentRouter -- FEEDBACK --> FeedbackListLambda["`**List Feedback Lambda**<br><br>Prepare pending/in-progress tasks for the Feedback Planner<br><br>In: []*schema.Message<br>Out: []*schema.Message`"]
+    FeedbackActionRouter["<b>Branch by Action Type</b><br>Action:<br>List | UPDATE | NONE"] -->|"NONE | LIST (we don't support LIST command for feedbacks)"| Passthrough
     FeedbackListLambda --> FeedbackActionRouter
-    FeedbackActionRouter -->|UPDATE| FeedbackPlanner["`**反馈规划器**<br><br>*检查当前用户反馈列表，并决定应新增或更新的条目；结果不会保存至历史状态*<br><br>输入：[]*schema.Message<br>输出：*schema.Message`"]
-    FeedbackPlanner --> UpdateFeedbackLambda["**更新反馈条目 Lambda**<br><br>*解析规划器输出并更新数据库中的反馈列表*<br><br>输入：*schema.Message<br>输出：[]*schema.Message"]
+    FeedbackActionRouter -->|UPDATE| FeedbackPlanner["`**Feedback Planner**<br>(we don't save this output into history state as well)<br><br>Check the current user feedback lists, and decide which items should be added/updated.<br><br>In: []*schema.Message<br>Out: *schema.Message`"]
+    FeedbackPlanner --> UpdateFeedbackLambda["<b>Update Feedback Items Lambda</b><br><br>Parse the output from the planner, then update the DB feedback list<br><br>In: *schema.Message<br>out: []*schema.Message"]
     UpdateShoppingListLambda --> Passthrough
     UpdateFeedbackLambda --> Passthrough
     IntentRouter -- OTHER --> Passthrough
-    Passthrough --> MemoryCompressionRouter["**对话长度检查**"]
-    MemoryCompressionRouter -- TRUE --> StartOfReplyAndCompressionChain["`**开始**<br>压缩 + 回复链`"]
-    StartOfReplyAndCompressionChain --> MemoryCompressor["`**记忆压缩器**<br><br>*将聊天历史压缩为增强笔记*<br><br>输入：[]*schema.Message<br>输出：*schema.Message`"] & ReplyGenerator["`**回复生成器**<br><br>*根据当前轮次生成回复*<br><br>输入：[]*schema.Message<br>输出：*schema.Message`"]
-    ReplyGenerator -->|"键：cinna_reply"| CompressionChainPostProcessor["`**链后处理器**<br><br>*等待并合并并行节点的结果*<br><br>输入：map[string]any<br>输出：*ReplyCompressionOutput`"]
-    MemoryCompressor -->|"键：memory_compression"| CompressionChainPostProcessor
-    MemoryCompressionRouter -- FALSE --> StartOfReplyOnlyChain["`**开始**<br>仅回复链`"]
-    StartOfReplyOnlyChain --> ReplyGenerator & PassThroughNode(["透传节点"])
+    Passthrough --> MemoryCompressionRouter["<b>Conversation size check</b>"]
+    MemoryCompressionRouter -- TRUE --> StartOfReplyAndCompressionChain["`**START**<br>Compression+Reply Chain`"]
+    StartOfReplyAndCompressionChain --> MemoryCompressor["`**Memory Compressor**<br><br>Compresses chat history into enhanced notes.<br><br>In: []*schema.Message<br>Out: *schema.Message`"] & ReplyGenerator["`****Reply Generator****<br><br>Generates a reply based on the current turn.<br><br>In: []*schema.Message<br>Out: *schema.Message`"]
+    ReplyGenerator -->|"key: cinna_reply"| CompressionChainPostProcessor["`**Chain Post Processor**<br><br>Waits for and combines the results from parallel nodes.<br><br>In: map[string]any<br>Out: *ReplyCompressionOutput`"]
+    MemoryCompressor -->|"key: memory_compression"| CompressionChainPostProcessor
+    MemoryCompressionRouter -- FALSE --> StartOfReplyOnlyChain["`**START**<br>Reply Only Chain`"]
+    StartOfReplyOnlyChain --> ReplyGenerator & PassThroughNode(["Passthrough node"])
     PassThroughNode --> CompressionChainPostProcessor
-    CompressionChainPostProcessor --> EndOfReplyAndCompressionChain["结束\n压缩 + 回复链"]
-    EndOfReplyAndCompressionChain --> ProcessOutputLambda["**输出处理 Lambda**<br><br>*整理并输出聊天历史、回复和其他元数据*<br><br>输入：*ReplyCompressionOutput<br>输出：*GraphOutput"]
-    ProcessOutputLambda --> End(["结束"])
+    CompressionChainPostProcessor --> EndOfReplyAndCompressionChain["END\nCompression+Reply Chain"]
+    EndOfReplyAndCompressionChain --> ProcessOutputLambda["<b>Process Output Lambda</b><br><br>Organizes and outputs chat history, response, and other metadata<br><br>In: *ReplyCompressionOutput<br>Out: *GraphOutput"]
+    ProcessOutputLambda --> End(["END"])
 ```
 
 ## 功能
@@ -96,7 +96,8 @@ flowchart LR
 - Docker
 - `sqlc`
 - Telegram Bot Token
-- DeepSeek API Key
+- A DeepSeek API key (用于生成回复)
+- An OpenAI API key (用于语音识别以及JSON输出)
 
 ## 配置
 
@@ -327,4 +328,4 @@ go vet ./...
 
 ## 手动 LLM 测试
 
-手动模型和智能体测试受 `internal/utils.EnforceManualTest` 保护。只有设置 `RUN_MANUAL_TEST=1` 时才会执行，并且需要提供 `DEEPSEEK_API_KEY`。
+手动模型和智能体测试受 `internal/utils.EnforceManualTest` 保护。只有设置 `RUN_MANUAL_TEST=1` 时才会执行，并且需要提供 `DEEPSEEK_API_KEY` 以及 `OPENAI_API_KEY`。

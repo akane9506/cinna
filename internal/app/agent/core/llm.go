@@ -20,10 +20,6 @@ var (
 	deepseekFlashModel *deepseek.ChatModel
 	deepseekFlashError error
 	deepseekFlashOnce  sync.Once
-
-	deepseekFlashJSONModel *deepseek.ChatModel
-	deepseekFlashJSONError error
-	deepseekFlashJSONOnce  sync.Once
 )
 
 const (
