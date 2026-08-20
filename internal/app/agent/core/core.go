@@ -19,7 +19,7 @@ type JSONModel = *deepseek.ChatModel
 
 type AgentCore struct {
 	chatModel  ChatModel
-	jsonModel  JSONModel
+	models     *Models
 	graph      Graph
 	prompts    *prompt.Prompts
 	repos      *ports.Repositories
@@ -34,6 +34,7 @@ func InitializeAgentCore(
 	logger *slog.Logger) (*AgentCore, error) {
 	apiKey := &APIKey{
 		Deepseek: config.DeepseekAPIKey,
+		OpenAI:   config.OpenaiAPIKey,
 	}
 	// load prompts
 	prompts := prompt.LoadPromptFiles(logger)
@@ -43,10 +44,7 @@ func InitializeAgentCore(
 	if err != nil {
 		return nil, fmt.Errorf("failed to create cinna react agent: %w", err)
 	}
-	jsonModel, err := models.CreateDeepseekFlashJSONModel(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create cinna react agent: %w", err)
-	}
+
 	// initialize graph with local chat history state
 	graph := compose.NewGraph[*GraphInput, *GraphOutput](
 		compose.WithGenLocalState(func(ctx context.Context) (state *AgentState) {
@@ -57,7 +55,7 @@ func InitializeAgentCore(
 	)
 	agentCore := &AgentCore{
 		chatModel:  chatModel,
-		jsonModel:  jsonModel,
+		models:     models,
 		repos:      repos,
 		graph:      graph,
 		prompts:    prompts,
@@ -71,9 +69,9 @@ func (a *AgentCore) BuildGraph(
 	ctx context.Context,
 ) (compose.Runnable[*GraphInput, *GraphOutput], error) {
 	a.RegisterInputProcessor()
-	a.RegisterIntentClassifier()
-	a.RegisterShoppingListWorkflow()
-	a.RegisterFeedbacksWorkflow()
+	a.RegisterIntentClassifier(ctx)
+	a.RegisterShoppingListWorkflow(ctx)
+	a.RegisterFeedbacksWorkflow(ctx)
 	a.RegisterPreChatPassthroughNode()
 	a.RegisterReplyCompressionChain(false) // reply only chain
 	a.RegisterReplyCompressionChain(true)  // reply and compression chain
@@ -106,15 +104,18 @@ func (a *AgentCore) BuildGraph(
 
 func (a *AgentCore) GetGraphRuntimeOptions(userID int64) []compose.Option {
 	options := []compose.Option{}
-	isolationOptions := GetDeepseekIsolationOptions([]*compose.NodePath{
-		compose.NewNodePath(intentLLMNodeName),
-		compose.NewNodePath(shoppingTasksPlannerLLMNodeName),
-		compose.NewNodePath(feedbacksUpdatePlannerLLMNodeName),
+	deepseekIsolationOptions := GetDeepseekIsolationOptions([]*compose.NodePath{
 		compose.NewNodePath(replyCompressionChainName, cinnaReplyNodeName),
 		compose.NewNodePath(replyCompressionChainName, compressionNodeName),
 		compose.NewNodePath(replyOnlyChainName, cinnaReplyNodeName),
 	}, userID)
-	options = append(options, isolationOptions...)
+	openaiCacheOptions := GetOpenAICacheOptions([]*compose.NodePath{
+		compose.NewNodePath(shoppingTasksPlannerLLMNodeName),
+		compose.NewNodePath(intentLLMNodeName),
+		compose.NewNodePath(feedbacksUpdatePlannerLLMNodeName),
+	}, userID)
+	options = append(options, deepseekIsolationOptions...)
+	options = append(options, openaiCacheOptions...)
 	if a.runtimeEnv == app.RuntimeDev {
 		nodePaths := []*compose.NodePath{
 			compose.NewNodePath(replyCompressionChainName, cinnaReplyNodeName),

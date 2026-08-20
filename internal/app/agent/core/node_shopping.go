@@ -13,8 +13,12 @@ import (
 	"github.com/akane9506/cinna/internal/app/ports"
 	db "github.com/akane9506/cinna/internal/postgres"
 	"github.com/akane9506/cinna/internal/postgres/sqlc"
+	"github.com/cloudwego/eino-ext/components/model/openai"
+	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/compose"
 	"github.com/cloudwego/eino/schema"
+	"github.com/eino-contrib/jsonschema"
+	orderedmap "github.com/wk8/go-ordered-map/v2"
 )
 
 const (
@@ -36,9 +40,68 @@ type UpdateShoppingListCommand struct {
 	Method   string `json:"method"`
 }
 
-func (a *AgentCore) RegisterShoppingListWorkflow() {
+func createUpdateShoppingListCommandsSchema() *openai.ChatCompletionResponseFormatJSONSchema {
+	singleCommandSchema := &jsonschema.Schema{
+		Type: string(schema.Object),
+		Properties: orderedmap.New[string, *jsonschema.Schema](
+			orderedmap.WithInitialData[string, *jsonschema.Schema](
+				orderedmap.Pair[string, *jsonschema.Schema]{
+					Key:   "id",
+					Value: &jsonschema.Schema{Type: string(schema.String)},
+				},
+				orderedmap.Pair[string, *jsonschema.Schema]{
+					Key:   "name",
+					Value: &jsonschema.Schema{Type: string(schema.String)},
+				},
+				orderedmap.Pair[string, *jsonschema.Schema]{
+					Key:   "category",
+					Value: &jsonschema.Schema{Type: string(schema.String)},
+				},
+				orderedmap.Pair[string, *jsonschema.Schema]{
+					Key:   "method",
+					Value: &jsonschema.Schema{Type: string(schema.String)},
+				},
+			),
+		),
+		Required:             []string{"id", "name", "category", "method"},
+		AdditionalProperties: jsonschema.FalseSchema,
+	}
+	commandsSchema := &jsonschema.Schema{
+		Type: string(schema.Object),
+		Properties: orderedmap.New[string, *jsonschema.Schema](
+			orderedmap.WithInitialData[string, *jsonschema.Schema](
+				orderedmap.Pair[string, *jsonschema.Schema]{
+					Key: "commands",
+					Value: &jsonschema.Schema{
+						Type:  string(schema.Array),
+						Items: singleCommandSchema,
+					},
+				},
+			),
+		),
+		Required:             []string{"commands"},
+		AdditionalProperties: jsonschema.FalseSchema,
+	}
+	return &openai.ChatCompletionResponseFormatJSONSchema{
+		Name:        "shopping_planner",
+		Description: "plan shopping list table operations",
+		Strict:      true,
+		JSONSchema:  commandsSchema,
+	}
+}
+
+// Add shopping list workflow to the graph
+func (a *AgentCore) RegisterShoppingListWorkflow(ctx context.Context) {
+	logger := a.logger.With(
+		"path", "internal/app/agent/core/node_shopping/RegisterShoppingListWorkflow",
+	)
+	model, err := a.models.CreateJSONModel(ctx, createUpdateShoppingListCommandsSchema())
+	if err != nil {
+		logger.Error("failed to register shopping list workflow")
+		return
+	}
 	addListShoppingItemsLambda(a.graph, a.repos.ShoppingList, a.logger)
-	addShoppingTaskPlanningNode(a.graph, a.jsonModel, a.prompts.ShoppingListPlanner)
+	addShoppingTaskPlanningNode(a.graph, model, a.prompts.ShoppingListPlanner)
 	addRunShoppingTaskLambdaNode(a.graph, a.repos.ShoppingList, a.logger)
 }
 
@@ -148,7 +211,7 @@ func shoppingActionBranch(ctx context.Context, out []*schema.Message) (string, e
 // ========== Shopping List Update Planner ==========
 // Plans the task based on the database and user's description
 // in: []*schema.Message | out: *schema.Message
-func addShoppingTaskPlanningNode(graph Graph, jsonModel JSONModel, prompt string) {
+func addShoppingTaskPlanningNode(graph Graph, jsonModel model.BaseChatModel, prompt string) {
 	graph.AddChatModelNode(shoppingTasksPlannerLLMNodeName, jsonModel,
 		compose.WithStatePreHandler(prepareForShoppingTaskPlanning(prompt)),
 	)

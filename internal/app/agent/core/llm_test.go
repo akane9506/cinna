@@ -2,8 +2,6 @@ package core
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 	"io"
 	"log/slog"
 	"testing"
@@ -32,7 +30,6 @@ func TestFailedModelCreations(t *testing.T) {
 	models := NewLLMModels(apiKey, logger)
 	_, err := models.CreateDeepseekFlashModel(ctx)
 	assert.Error(t, err)
-	_, err = models.CreateDeepseekFlashJSONModel(ctx)
 	assert.Error(t, err)
 }
 
@@ -105,38 +102,38 @@ func TestDeepSeekFlashChatModelManual(t *testing.T) {
 	t.Log(resp.Content)
 }
 
-func TestDeepSeekFlashJSONModelManual(t *testing.T) {
-	utils.EnforceManualTest(t)
-	ctx := context.Background()
-	models := setupModels()
-	JSONModel, err := models.CreateDeepseekFlashJSONModel(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	resp, err := JSONModel.Generate(ctx, []*schema.Message{
-		schema.SystemMessage(`
-	The user will provide some exam text. please answer the question.
+// func TestDeepSeekFlashJSONModelManual(t *testing.T) {
+// 	utils.EnforceManualTest(t)
+// 	ctx := context.Background()
+// 	models := setupModels()
+// 	JSONModel, err := models.CreateDeepseekFlashJSONModel(ctx)
+// 	if err != nil {
+// 		t.Fatal(err)
+// 	}
+// 	resp, err := JSONModel.Generate(ctx, []*schema.Message{
+// 		schema.SystemMessage(`
+// 	The user will provide some exam text. please answer the question.
 
-	EXAMPLE INPUT:
-	Which is the highest mountain in the world? Mount Everest.
+// 	EXAMPLE INPUT:
+// 	Which is the highest mountain in the world? Mount Everest.
 
-	EXAMPLE JSON OUTPUT:
-	{
-	    "question": "Which is the highest mountain in the world?",
-	    "answer": "Mount Everest"
-	}`),
-		schema.UserMessage("What is a good way to create a graph agent?"),
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Log(resp.Role, resp.Content)
-	var parsedResponse struct {
-		Question string `json:"question"`
-		Answer   string `json:"answer"`
-	}
-	if err := json.Unmarshal([]byte(resp.Content), &parsedResponse); err != nil {
-		t.Fatal(err)
-	}
-	t.Log(fmt.Sprintf("%+v", parsedResponse))
-}
+// 	EXAMPLE JSON OUTPUT:
+// 	{
+// 	    "question": "Which is the highest mountain in the world?",
+// 	    "answer": "Mount Everest"
+// 	}`),
+// 		schema.UserMessage("What is a good way to create a graph agent?"),
+// 	})
+// 	if err != nil {
+// 		t.Fatal(err)
+// 	}
+// 	t.Log(resp.Role, resp.Content)
+// 	var parsedResponse struct {
+// 		Question string `json:"question"`
+// 		Answer   string `json:"answer"`
+// 	}
+// 	if err := json.Unmarshal([]byte(resp.Content), &parsedResponse); err != nil {
+// 		t.Fatal(err)
+// 	}
+// 	t.Log(fmt.Sprintf("%+v", parsedResponse))
+// }
