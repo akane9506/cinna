@@ -87,6 +87,7 @@ func main() {
 
 	// start telegram bot
 	tgClient, err := telegram.NewClient(
+		ctx,
 		config.TelegramBotToken,
 		repos,
 		agent,
