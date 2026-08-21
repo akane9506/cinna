@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"testing"
@@ -240,12 +241,22 @@ func TestHandleManageNotificationCommand(t *testing.T) {
 		{
 			name: "invalid arguments",
 			args: []string{},
-			want: "<b>Invalid arguments</b>\nUsage: <code>/notify &lt;on|off&gt;</code>",
+			want: fmt.Sprintf("%s\n%s\n%s\n%s",
+				"命令使用方式：<code>/notify &lt;on|off&gt;</code>\n",
+				"<b>示例:</b>",
+				"<code>/notify on</code> \t 打开每日提醒",
+				"<code>/notify off</code> \t 关闭每日提醒",
+			),
 		},
 		{
 			name: "too many arguments",
 			args: []string{"on", "extra"},
-			want: "<b>Invalid arguments</b>\nUsage: <code>/notify &lt;on|off&gt;</code>",
+			want: fmt.Sprintf("%s\n%s\n%s\n%s",
+				"命令使用方式：<code>/notify &lt;on|off&gt;</code>\n",
+				"<b>示例:</b>",
+				"<code>/notify on</code> \t 打开每日提醒",
+				"<code>/notify off</code> \t 关闭每日提醒",
+			),
 		},
 		{
 			name: "invalid status",
