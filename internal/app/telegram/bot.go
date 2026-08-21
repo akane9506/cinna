@@ -2,6 +2,7 @@ package telegram
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/akane9506/cinna/internal/app/ports"
 	"github.com/go-telegram/bot"
+	"github.com/go-telegram/bot/models"
 )
 
 type AgentHandler interface {
@@ -36,6 +38,7 @@ type Client struct {
 
 // create a new telegram bot client
 func NewClient(
+	ctx context.Context,
 	botToken string,
 	repositories *ports.Repositories,
 	agentHandler AgentHandler,
@@ -65,11 +68,29 @@ func NewClient(
 		bot.WithWebhookSecretToken(webhookSecret),
 	}
 
-	bot, err := bot.New(botToken, opts...)
+	clientBot, err := bot.New(botToken, opts...)
 	if err != nil {
 		return nil, err
 	}
-	client.bot = bot
+	client.bot = clientBot
+	_, err = client.bot.SetMyCommands(
+		ctx,
+		&bot.SetMyCommandsParams{
+			Commands: []models.BotCommand{
+				{
+					Command:     "help",
+					Description: "Show all available commands",
+				},
+				{
+					Command:     "notify",
+					Description: "Turn on/off daily notification",
+				},
+			},
+		},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to set Telegram bot commands: %w", err)
+	}
 	return client, nil
 }
 

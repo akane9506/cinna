@@ -136,7 +136,12 @@ func (c *Client) handleManageNotificationCommand(
 	args []string) string {
 	logger := c.logger.With("path", "internal/telegram/handlers/handleManageNotificationCommans")
 	if len(args) != 1 {
-		return "<b>Invalid arguments</b>\nUsage: <code>/notify &lt;on|off&gt;</code>"
+		return fmt.Sprintf("%s\n%s\n%s\n%s",
+			"命令使用方式：<code>/notify &lt;on|off&gt;</code>\n",
+			"<b>示例:</b>",
+			"<code>/notify on</code> \t 打开每日提醒",
+			"<code>/notify off</code> \t 关闭每日提醒",
+		)
 	}
 	status := args[0]
 	if status != "on" && status != "off" {
