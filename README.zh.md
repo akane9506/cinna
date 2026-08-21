@@ -1,8 +1,6 @@
 <div align="center">
 
-<svg width="180" height="180" style="border-radius: 50%;">
-    <img src="./assets/cinna-small.jpg" width="180px" height="180px"/>
-</svg>
+<img src="./assets/cinna-cover-zh.jpg" width="90%"/>
 
 <h1>Cinna</h1>
 
