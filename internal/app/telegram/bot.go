@@ -85,6 +85,10 @@ func NewClient(
 					Command:     "notify",
 					Description: "Turn on/off daily notification",
 				},
+				{
+					Command:     "memory",
+					Description: "Check the compressed chat memory",
+				},
 			},
 		},
 	)

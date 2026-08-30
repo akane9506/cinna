@@ -81,6 +81,8 @@ func (c *Client) handleCommands(
 		if isAdmin {
 			replyMessage += "\n" + adminCommandDoc
 		}
+	case "/memory":
+		replyMessage = c.handleMemoryCommand(ctx, telegramUserID)
 	case "/notify":
 		replyMessage = c.handleManageNotificationCommand(ctx, telegramUserID, args)
 	default:
@@ -167,6 +169,31 @@ func (c *Client) handleManageNotificationCommand(
 		return "Failed to turn off the notification\n."
 	}
 	return "Notification <b>Off</b>\n"
+}
+
+// handle check memory command
+// This function returns the compressed memory, which is the first message in the
+// chat memory
+func (c *Client) handleMemoryCommand(ctx context.Context, telegramUserID int64) string {
+	logger := c.logger.With("path", "internal/app/telegram/handlers_internal/handleMemoryCommand")
+	memory, err := c.repositories.AgentMemory.ListRecentAgentMemory(ctx, telegramUserID)
+	if err != nil {
+		logger.Error(
+			"failed to fetch user's chat memory",
+			"telegram_user_id", telegramUserID,
+			"error", err,
+		)
+		return "Failed to fetch memory."
+	}
+	if len(memory) == 0 {
+		return "Current chat history is empty."
+	}
+	replyMessage := fmt.Sprintf(
+		"<b>Memory Size</b>: %d\n<b>Compressed Memory</b>: \n%s\n",
+		len(memory),
+		memory[0].Content,
+	)
+	return replyMessage
 }
 
 // handle text message

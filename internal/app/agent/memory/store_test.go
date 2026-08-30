@@ -23,9 +23,8 @@ type mockAgentMemoryRepo struct {
 func (m *mockAgentMemoryRepo) ListRecentAgentMemory(
 	ctx context.Context,
 	telegramUserID int64,
-	maxHistoryLength int32,
 ) ([]sqlc.AgentMemory, error) {
-	args := m.Called(ctx, telegramUserID, maxHistoryLength)
+	args := m.Called(ctx, telegramUserID)
 	return args.Get(0).([]sqlc.AgentMemory), args.Error(1)
 }
 
@@ -35,14 +34,6 @@ func (m *mockAgentMemoryRepo) AppendAgentMemoryBatch(
 ) ([]sqlc.AgentMemory, error) {
 	args := m.Called(ctx, params)
 	return args.Get(0).([]sqlc.AgentMemory), args.Error(1)
-}
-
-func (m *mockAgentMemoryRepo) PruneAgentMemory(
-	ctx context.Context,
-	telegramUserID int64,
-	keepCount int32) error {
-	args := m.Called(ctx, telegramUserID, keepCount)
-	return args.Error(0)
 }
 
 func (m *mockAgentMemoryRepo) ReplaceAgentMemory(
@@ -121,17 +112,6 @@ func TestFlushBuffer(t *testing.T) {
 			inputContents:      []string{"user", "assistant"},
 			expectedFlushError: errors.New("failed to flush"),
 		},
-		// {
-		// 	name: "error prune db",
-		// 	buffer: []schema.Message{
-		// 		schema.Message{Role: schema.User, Content: "user"},
-		// 		schema.Message{Role: schema.Assistant, Content: "assistant"},
-		// 	},
-		// 	inputRoles:         []string{string(schema.User), string(schema.Assistant)},
-		// 	inputContents:      []string{"user", "assistant"},
-		// 	expectedFlushError: nil,
-		// 	expectedPruneError: errors.New("failed to prune"),
-		// },
 	}
 
 	for _, tt := range tests {
@@ -254,7 +234,6 @@ func TestLoadHistoryFromDB(t *testing.T) {
 			agentMemoryRepo.On("ListRecentAgentMemory",
 				mock.Anything,
 				mock.AnythingOfType("int64"),
-				mock.AnythingOfType("int32"),
 			).Return(tt.mockMemory, tt.mockListMemoryError).Once()
 			output, err := store.loadHistoryFromDB(context.Background(), mockTelegramUserID)
 			assert.Equal(t, tt.expectedOutput, output)
@@ -310,7 +289,6 @@ func TestGet(t *testing.T) {
 				mockMemoryRepo.On("ListRecentAgentMemory",
 					mock.Anything,
 					mock.AnythingOfType("int64"),
-					mock.AnythingOfType("int32"),
 				).Return(tt.remoteHistory, nil).Once()
 			}
 			result := store.Get(ctx, mockTelegramUserID)
