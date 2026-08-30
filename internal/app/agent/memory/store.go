@@ -12,16 +12,12 @@ import (
 )
 
 const (
-	// number of history messages for conversation,  including assistant and user msg, should be enough
-	defaultMaxChatLength = 50
-
 	// flush buffer to the history db when buffer size equals or higher than this threshold
 	defaultFlushBufferThreshold = 2 // we can increase this when having a constant-running instance
 )
 
 type MemoryStore struct {
 	mu                   sync.RWMutex // protects the user map only
-	maxChatLength        int
 	flushBufferThreshold int
 
 	users       map[int64]*userState
@@ -43,7 +39,6 @@ type userState struct {
 func NewMemoryStore(agentMemoryRepo ports.AgentMemoryRepository, logger *slog.Logger) *MemoryStore {
 	store := &MemoryStore{
 		users:                map[int64]*userState{},
-		maxChatLength:        defaultMaxChatLength,
 		flushBufferThreshold: defaultFlushBufferThreshold,
 		agentMemory:          agentMemoryRepo,
 		logger:               logger,
@@ -193,7 +188,7 @@ func (m *MemoryStore) flushBuffer(ctx context.Context, userID int64, userState *
 func (m *MemoryStore) loadHistoryFromDB(ctx context.Context, userID int64) ([]schema.Message, error) {
 	parsedHistory := []schema.Message{}
 	logger := m.logger.With("path", "internal/app/agent/memory/state/loadHistoryFromDB")
-	dbHistory, err := m.agentMemory.ListRecentAgentMemory(ctx, userID, int32(m.maxChatLength))
+	dbHistory, err := m.agentMemory.ListRecentAgentMemory(ctx, userID)
 	if err != nil {
 		return parsedHistory, err
 	}

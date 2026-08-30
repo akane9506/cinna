@@ -32,14 +32,11 @@ func NewAgentMemoryRepository(
 func (a *AgentMemoryRepository) ListRecentAgentMemory(
 	ctx context.Context,
 	telegramUserID int64,
-	maxHistoryLength int32,
 ) ([]sqlc.AgentMemory, error) {
 	memory, err := a.queries.ListRecentAgentMemory(
 		ctx,
-		sqlc.ListRecentAgentMemoryParams{
-			TelegramUserID: telegramUserID,
-			MaxLength:      maxHistoryLength,
-		})
+		telegramUserID,
+	)
 	if err != nil {
 		return nil, err
 	}

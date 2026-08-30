@@ -56,7 +56,6 @@ type AgentMemoryRepository interface {
 	ListRecentAgentMemory(
 		ctx context.Context,
 		telegramUserID int64,
-		maxHistoryLength int32,
 	) ([]sqlc.AgentMemory, error)
 
 	AppendAgentMemoryBatch(

@@ -17,6 +17,8 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
+const mockTelegramUserID int64 = 12345
+
 // mocks
 type mockBotChatValidator struct {
 	mock.Mock
@@ -66,6 +68,30 @@ func (m *mockAllowListRepository) DailyNotificationSubscribers(
 	ctx context.Context) ([]int64, error) {
 	args := m.Called(ctx)
 	return args.Get(0).([]int64), args.Error(1)
+}
+
+type mockAgentMemoryRepository struct {
+	mock.Mock
+}
+
+func (m *mockAgentMemoryRepository) ListRecentAgentMemory(
+	ctx context.Context, telegramUserID int64) ([]sqlc.AgentMemory, error) {
+	args := m.Called(ctx, telegramUserID)
+	return args.Get(0).([]sqlc.AgentMemory), args.Error(1)
+}
+
+func (m *mockAgentMemoryRepository) AppendAgentMemoryBatch(
+	ctx context.Context, params sqlc.AppendAgentMemoryBatchParams,
+) ([]sqlc.AgentMemory, error) {
+	args := m.Called(ctx, params)
+	return args.Get(0).([]sqlc.AgentMemory), args.Error(1)
+}
+
+func (m *mockAgentMemoryRepository) ReplaceAgentMemory(
+	ctx context.Context, params sqlc.ReplaceAgentMemoryParams,
+) ([]sqlc.AgentMemory, error) {
+	args := m.Called(ctx, params)
+	return args.Get(0).([]sqlc.AgentMemory), args.Error(1)
 }
 
 // tests
@@ -316,6 +342,63 @@ func TestHandleManageNotificationCommand(t *testing.T) {
 			)
 			assert.Equal(t, tt.want, got)
 			allowListRepo.AssertExpectations(t)
+		})
+	}
+}
+
+func TestHandleMemoryCommand(t *testing.T) {
+	t.Parallel()
+	mockAgentMemoryRepo := new(mockAgentMemoryRepository)
+	mockLogger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	client := Client{
+		logger: mockLogger,
+		repositories: &ports.Repositories{
+			AgentMemory: mockAgentMemoryRepo,
+		},
+	}
+	tests := []struct {
+		name       string
+		mockError  error
+		mockMemory []sqlc.AgentMemory
+		want       string
+	}{
+		{
+			name:      "success",
+			mockError: nil,
+			mockMemory: []sqlc.AgentMemory{
+				{Content: "This is memory"},
+				{Content: "This is chat"},
+			},
+			want: fmt.Sprintf(
+				"<b>Memory Size</b>: %d\n<b>Compressed Memory</b>: \n%s\n",
+				2,
+				"This is memory",
+			),
+		},
+		{
+			name:       "empty memory",
+			mockError:  nil,
+			mockMemory: []sqlc.AgentMemory{},
+			want:       "Current chat history is empty.",
+		},
+		{
+			name:       "error getting memory",
+			mockError:  errors.New("failed to get memory"),
+			mockMemory: nil,
+			want:       "Failed to fetch memory.",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			mockAgentMemoryRepo.
+				On("ListRecentAgentMemory", mock.Anything, mockTelegramUserID).
+				Return(tt.mockMemory, tt.mockError).Once()
+			got := client.handleMemoryCommand(ctx, mockTelegramUserID)
+			if tt.mockError == nil {
+				assert.Equal(t, got, tt.want)
+			}
+			mockAgentMemoryRepo.AssertExpectations(t)
 		})
 	}
 }

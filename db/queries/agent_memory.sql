@@ -1,13 +1,8 @@
 -- name: ListRecentAgentMemory :many
 SELECT *
-FROM (
-    SELECT *
-    FROM agent_memory
-    WHERE telegram_user_id = sqlc.arg(telegram_user_id)
-    ORDER BY id DESC
-    LIMIT sqlc.arg(max_length)
-) recent
-ORDER BY id ASC;
+FROM agent_memory
+WHERE telegram_user_id = sqlc.arg(telegram_user_id)
+ORDER BY created_at ASC, id ASC;
 
 -- name: AppendAgentMemoryBatch :many
 WITH input_messages AS (
