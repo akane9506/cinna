@@ -112,7 +112,7 @@ func logMessages(title string, msgs []*schema.Message) {
 	fmt.Println()
 	fmt.Println("Start Logging", title)
 	for _, msg := range msgs {
-		fmt.Println(fmt.Sprintf("[%s] %s", msg.Role, msg.Content))
+		fmt.Printf("[%s] %s", msg.Role, msg.Content)
 	}
 	fmt.Println()
 }
@@ -121,7 +121,8 @@ func logMessages(title string, msgs []*schema.Message) {
 func organizeInputMessage(input []*schema.Message, systemPrompt string) []*schema.Message {
 	// inject intent classification prompt
 	msgs := []*schema.Message{
-		&schema.Message{Role: schema.System, Content: systemPrompt}}
+		{Role: schema.System, Content: systemPrompt},
+	}
 	// include Tool and Assistant chat history
 	for _, msg := range input {
 		if msg.Role == schema.System {
@@ -139,7 +140,8 @@ func organizeInputMessageWithoutSensitiveInfo(
 	input []*schema.Message, systemPrompt string) []*schema.Message {
 	// inject intent classification prompt
 	msgs := []*schema.Message{
-		&schema.Message{Role: schema.System, Content: systemPrompt}}
+		{Role: schema.System, Content: systemPrompt},
+	}
 	// include Tool and Assistant chat history
 	for _, msg := range input {
 		if msg.Role == schema.System {
