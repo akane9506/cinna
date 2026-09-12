@@ -24,7 +24,7 @@ var (
 
 const (
 	deepseekBaseURL        = "https://api.deepseek.com"
-	deepseekFlashModelName = "deepseek-v4-flash"
+	deepseekFlashModelName = "deepseek-flash"
 	gptModelName           = "gpt-5.6-luna"
 )
 
