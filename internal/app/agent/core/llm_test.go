@@ -3,7 +3,6 @@ package core
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"log/slog"
 	"testing"
@@ -114,7 +113,7 @@ func TestJSONModelManual(t *testing.T) {
 	structuredSchema := &jsonschema.Schema{
 		Type: string(schema.Object),
 		Properties: orderedmap.New[string, *jsonschema.Schema](
-			orderedmap.WithInitialData[string, *jsonschema.Schema](
+			orderedmap.WithInitialData(
 				orderedmap.Pair[string, *jsonschema.Schema]{
 					Key: "question",
 					Value: &jsonschema.Schema{
@@ -166,5 +165,5 @@ func TestJSONModelManual(t *testing.T) {
 	if err := json.Unmarshal([]byte(resp.Content), &parsedResponse); err != nil {
 		t.Fatal(err)
 	}
-	t.Log(fmt.Sprintf("%+v", parsedResponse))
+	t.Logf("%+v\n", parsedResponse)
 }

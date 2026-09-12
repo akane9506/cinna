@@ -112,7 +112,7 @@ func logMessages(title string, msgs []*schema.Message) {
 	fmt.Println()
 	fmt.Println("Start Logging", title)
 	for _, msg := range msgs {
-		fmt.Printf("[%s] %s", msg.Role, msg.Content)
+		fmt.Printf("[%s] %s\n", msg.Role, msg.Content)
 	}
 	fmt.Println()
 }
